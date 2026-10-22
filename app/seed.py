@@ -60,6 +60,8 @@ TRANSLIT = str.maketrans({
     "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
 })
 
+COVERAGE_ORDER = ["dairy", "meat", "fish", "veg", "ready", "bakery", "grocery", "sauces", "packaging", "drinks"]
+
 # Распределители чаще всего возят «сухие» категории пачкой.
 DISTRIBUTOR_BUNDLES = [["grocery", "sauces"], ["grocery", "packaging"], ["dairy", "meat"],
                        ["fish", "grocery"], ["drinks", "packaging"], ["sauces", "packaging", "grocery"]]
@@ -127,9 +129,9 @@ def _heroes() -> list[Supplier]:
         type="producer", founded=date(2016, 4, 12), employees=85, revenue_mln_rub=210.0,
         phone="+7 343 311-45-20", email="opt@uralsyr.example", whatsapp="+79221114520",
         preferred_channel="whatsapp", min_order_kg=50, own_delivery=True, cold_chain=True,
-        delivery_days=1, delivery_radius_km=250, delivery_schedule="вт, пт", deferral_days=7,
+        delivery_days=1, delivery_radius_km=250, delivery_schedule="вт, пт", deferral_days=14,
         rating=4.8, reviews_count=64, lawsuits=0, linked_problem_company=None,
-        products=[Product(name="Моцарелла", key="mozzarella", category="dairy", price=495, price_rub=495, unit="кг"),
+        products=[Product(name="Моцарелла", key="mozzarella", category="dairy", price=485, price_rub=485, unit="кг"),
                   Product(name="Сливочный сыр", key="cream_cheese", category="dairy", price=780, price_rub=780, unit="кг"),
                   Product(name="Сметана", key="sour_cream", category="dairy", price=210, price_rub=210, unit="кг")],
         documents=[Document(kind="declaration", number="ЕАЭС N RU Д-RU.РА01.В.48211", valid_until=date(2027, 3, 31)),
@@ -180,12 +182,16 @@ def generate_suppliers(seed: int = 42) -> list[Supplier]:
         city = CITIES[city_key]
         kz = city.country == "KZ"
         words = WORDS_KZ if kz else WORDS_RU
-        for _ in range(count):
-            distributor = rnd.random() < 0.3
+        for i in range(count):
+            # Первые поставщики города — производители по ключевым категориям, чтобы в каждом
+            # городе нашлись молочка, мясо, рыба, овощи и готовая еда; дальше — вперемешку.
+            distributor = i >= len(COVERAGE_ORDER) and rnd.random() < 0.45
             if distributor:
                 categories = list(rnd.choice(DISTRIBUTOR_BUNDLES))
+            elif i < len(COVERAGE_ORDER):
+                categories = [COVERAGE_ORDER[i]]
             else:
-                categories = [cat_keys[next_id % len(cat_keys)]]
+                categories = [rnd.choice(cat_keys)]
             name = rnd.choice(NAME_TEMPLATES[categories[0]]).format(w=rnd.choice(words))
             while name in used_names:
                 name = rnd.choice(NAME_TEMPLATES[categories[0]]).format(w=rnd.choice(words)) + f" {rnd.randint(2, 9)}"
