@@ -6,10 +6,10 @@
 """
 import random
 import sqlite3
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from .catalog import ANIMAL_CATEGORIES, CATEGORIES, CITIES, KZT_PER_RUB, PRODUCTS
-from .db import insert_supplier, save_profile
+from .db import add_kp_event, add_note, create_kp, insert_supplier, save_profile
 from .models import Document, Product, Profile, Supplier
 
 GENERATED_ON = date(2026, 10, 22)
@@ -267,4 +267,18 @@ def seed_db(conn: sqlite3.Connection) -> None:
     for s in generate_suppliers():
         insert_supplier(conn, s)
     save_profile(conn, DEFAULT_PROFILE)
+    _seed_activity(conn, datetime.now().replace(microsecond=0))
     conn.commit()
+
+
+def _seed_activity(conn: sqlite3.Connection, now: datetime) -> None:
+    """Пара заметок и три запроса КП, чтобы вкладки не были пустыми на демо."""
+    add_note(conn, 1, "Анна, шеф", "Дегустация 12.10 — тянется хорошо, на пицце не течёт. 4/5", now - timedelta(days=10))
+    add_note(conn, 2, "Владимир, закупки", "Менеджер отвечает быстро, но партия от 300 кг — для одной кухни много.", now - timedelta(days=6))
+    third = conn.execute("SELECT supplier_id FROM products WHERE key = 'mozzarella' AND supplier_id > 3 "
+                         "ORDER BY supplier_id LIMIT 1").fetchone()[0]
+    rid = create_kp(conn, 1, "Моцарелла", "whatsapp", now - timedelta(days=4))
+    add_kp_event(conn, rid, "received", "КП получено", now - timedelta(days=3))
+    conn.execute("UPDATE kp_requests SET status = 'received', price_rub = 485, note = 'Образец привезут в пятницу' WHERE id = ?", (rid,))
+    create_kp(conn, 2, "Моцарелла", "email", now - timedelta(days=2))
+    create_kp(conn, third, "Моцарелла", "email", now - timedelta(hours=2))

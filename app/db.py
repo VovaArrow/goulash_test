@@ -2,9 +2,10 @@
 import json
 import sqlite3
 from collections import defaultdict
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from .models import Document, Product, Profile, Supplier
+from .models import Document, KPEvent, KPRequest, Note, Product, Profile, Supplier
 
 SCHEMA = Path(__file__).with_name("schema.sql")
 
@@ -105,4 +106,82 @@ def save_profile(conn: sqlite3.Connection, p: Profile) -> None:
     cols = ", ".join(data)
     marks = ", ".join(f":{k}" for k in data)
     conn.execute(f"INSERT OR REPLACE INTO profile (id, {cols}) VALUES (1, {marks})", data)
+    conn.commit()
+
+
+# --- Заметки команды ---
+
+def add_note(conn: sqlite3.Connection, supplier_id: int, author: str, text: str, now: datetime) -> Note:
+    cur = conn.execute("INSERT INTO notes (supplier_id, author, text, created_at) VALUES (?, ?, ?, ?)",
+                       (supplier_id, author, text, now.isoformat(timespec="seconds")))
+    conn.commit()
+    return Note(id=cur.lastrowid, supplier_id=supplier_id, author=author, text=text, created_at=now)
+
+
+def list_notes(conn: sqlite3.Connection, supplier_id: int) -> list[Note]:
+    rows = conn.execute("SELECT * FROM notes WHERE supplier_id = ? ORDER BY created_at DESC, id DESC", (supplier_id,))
+    return [Note(**dict(r)) for r in rows]
+
+
+# --- Запросы КП ---
+
+KP_REPLY_DAYS = 3
+CHANNEL_LABELS = {"email": "e-mail", "whatsapp": "WhatsApp", "telegram": "Telegram", "copy": "скопированный текст"}
+
+
+def add_kp_event(conn: sqlite3.Connection, request_id: int, status: str, text: str, now: datetime) -> None:
+    conn.execute("INSERT INTO kp_events (request_id, at, status, text) VALUES (?, ?, ?, ?)",
+                 (request_id, now.isoformat(timespec="seconds"), status, text))
+
+
+def create_kp(conn: sqlite3.Connection, supplier_id: int, product_label: str, channel: str, now: datetime,
+              status: str = "sent", price_rub: float | None = None, note: str | None = None) -> int:
+    cur = conn.execute(
+        "INSERT INTO kp_requests (supplier_id, product_label, channel, status, price_rub, note, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (supplier_id, product_label, channel, status, price_rub, note, now.isoformat(timespec="seconds")))
+    add_kp_event(conn, cur.lastrowid, "sent", f"Отправлено через {CHANNEL_LABELS[channel]}", now)
+    conn.commit()
+    return cur.lastrowid
+
+
+def _kp_from_row(conn: sqlite3.Connection, r: sqlite3.Row, now: datetime) -> KPRequest:
+    created = datetime.fromisoformat(r["created_at"])
+    days = max(0, (now.date() - created.date()).days)
+    status = r["status"]
+    if status == "sent" and days >= 1:
+        status = "waiting"
+    events = [KPEvent(at=e["at"], status=e["status"], text=e["text"]) for e in
+              conn.execute("SELECT * FROM kp_events WHERE request_id = ? ORDER BY at, id", (r["id"],))]
+    return KPRequest(id=r["id"], supplier_id=r["supplier_id"], supplier_name=r["supplier_name"],
+                     product_label=r["product_label"], channel=r["channel"], status=status,
+                     price_rub=r["price_rub"], note=r["note"], created_at=created, days_waiting=days,
+                     reply_due=(created + timedelta(days=KP_REPLY_DAYS)).date(), events=events)
+
+
+_KP_SELECT = ("SELECT k.*, s.name AS supplier_name FROM kp_requests k "
+              "JOIN suppliers s ON s.id = k.supplier_id")
+
+
+def list_kp(conn: sqlite3.Connection, now: datetime) -> list[KPRequest]:
+    rows = conn.execute(f"{_KP_SELECT} ORDER BY k.created_at DESC, k.id DESC").fetchall()
+    return [_kp_from_row(conn, r, now) for r in rows]
+
+
+def get_kp(conn: sqlite3.Connection, request_id: int, now: datetime) -> KPRequest | None:
+    r = conn.execute(f"{_KP_SELECT} WHERE k.id = ?", (request_id,)).fetchone()
+    return _kp_from_row(conn, r, now) if r else None
+
+
+KP_STATUS_EVENTS = {"sent": "Отправлено повторно", "waiting": "Ждём ответ",
+                    "received": "КП получено", "declined": "Поставщик отказал"}
+
+
+def update_kp(conn: sqlite3.Connection, request_id: int, fields: dict, now: datetime) -> None:
+    current = conn.execute("SELECT status FROM kp_requests WHERE id = ?", (request_id,)).fetchone()
+    if "status" in fields and fields["status"] != current["status"]:
+        add_kp_event(conn, request_id, fields["status"], KP_STATUS_EVENTS[fields["status"]], now)
+    if fields:
+        sets = ", ".join(f"{k} = :{k}" for k in fields)
+        conn.execute(f"UPDATE kp_requests SET {sets} WHERE id = :id", {**fields, "id": request_id})
     conn.commit()

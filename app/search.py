@@ -127,3 +127,26 @@ def run_search(conn: sqlite3.Connection, req: SearchRequest, profile: Profile, t
         median_price_rub=median, origin={"lat": lat, "lon": lon, "label": label},
         facets=facets, relax=relax,
     )
+
+
+def score_selected(conn: sqlite3.Connection, ids: list[int], c: Criteria, profile: Profile, mode: str,
+                   today: date, explainer=None) -> list[ScoredSupplier]:
+    """Оценка конкретных поставщиков (для сравнения) — без жёстких фильтров, медиана — по рынку."""
+    market = run_search(conn, SearchRequest(criteria=c, mode=mode), profile, today)
+    lat, lon, _ = origin_for(c, profile)
+    by_id = {s.id: s for s in db.load_suppliers(conn, ids)}
+    items = []
+    for sid in ids:
+        s = by_id.get(sid)
+        if s is None:
+            continue
+        offer = best_offer(s, c)
+        distance = round(haversine_km(lat, lon, s.lat, s.lon), 1)
+        total, parts = score_supplier(s, c, offer, distance, market.median_price_rub, mode, today)
+        item = ScoredSupplier(supplier=s, score=total, parts=parts, distance_km=distance, offer=offer,
+                              flags=risk_flags(s, c, offer, distance, today),
+                              logistics_text=logistics_text(s, distance))
+        if explainer is not None:
+            item.reasons = explainer.reasons(item, c, market.median_price_rub)
+        items.append(item)
+    return items
