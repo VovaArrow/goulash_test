@@ -1,2 +1,585 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><title>Goulash · Поставщики</title></head><body>Goulash</body></html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Goulash · Поставщики</title>
+  <meta name="description" content="Поиск и сравнение поставщиков продуктов питания для сетей общепита: запрос словами, проверка, сравнение, запрос КП.">
+  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/vendor/leaflet.css">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/vendor/leaflet.js"></script>
+  <script src="/static/app.js"></script>
+  <script defer src="/static/vendor/alpine.min.js"></script>
+</head>
+<body x-data="app" x-cloak>
+
+<header class="top">
+  <a class="logo" href="/" @click.prevent="reset()">
+    <svg viewBox="0 0 28 28" aria-hidden="true">
+      <rect width="28" height="28" rx="7" fill="#21FFFF"/>
+      <rect x="6" y="6" width="16" height="16" rx="4" fill="#0E4D4F"/>
+      <rect x="9.5" y="9.5" width="9" height="9" rx="2" fill="#21FFFF"/>
+      <rect x="14" y="12" width="4.5" height="4" fill="#0E4D4F"/>
+    </svg>
+    Goulash.tech <span class="sub">· Поставщики</span>
+  </a>
+  <nav class="nav" aria-label="Разделы">
+    <button :aria-current="view === 'search' ? 'page' : null" @click="view = 'search'">Поиск</button>
+    <button :aria-current="view === 'requests' ? 'page' : null" @click="view = 'requests'">
+      Запросы КП<span class="count" x-show="waitingCount" x-text="waitingCount"></span>
+    </button>
+    <button :aria-current="view === 'about' ? 'page' : null" @click="view = 'about'">Как это работает</button>
+  </nav>
+  <div class="spacer"></div>
+  <span class="demo-badge" title="Компании, ИНН и контакты выдуманы. Реальные источники описаны в разделе «Как это работает».">демо-данные</span>
+  <button class="profile-btn" @click="openProfile()" x-show="profile">
+    <span x-text="profile?.company"></span>
+    <small x-text="profile ? cityName(profile.city) + ' · ' + profile.points + ' точек' : ''"></small>
+  </button>
+  <button class="btn sm" @click="reset()">Новый поиск</button>
+</header>
+
+<main>
+  <!-- ========== ПОИСК ========== -->
+  <section x-show="view === 'search'">
+
+    <!-- Пустое состояние -->
+    <div class="hero" x-show="!res">
+      <p class="eyebrow">Подбор поставщиков для сетей общепита и готовой еды</p>
+      <h1>Найдите поставщика за минуту</h1>
+      <p class="lead">Опишите, что нужно, как написали бы коллеге. Сервис разберёт запрос, проверит компании и документы, сравнит условия и подскажет, кому писать первым.</p>
+      <form class="query" @submit.prevent="submit()">
+        <label for="q" class="sr-only">Что ищем</label>
+        <textarea id="q" x-model="query" rows="2" placeholder="Например: моцарелла для пиццы в Екатеринбург, ~200 кг в месяц, обязательно декларации"
+                  @keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); submit(); }"></textarea>
+        <button class="btn acc" type="submit" :disabled="!query.trim()">Найти</button>
+        <span class="hint">Enter — искать, Shift+Enter — новая строка</span>
+      </form>
+      <p x-show="error" x-text="error" style="color: var(--bad)"></p>
+      <div class="examples">
+        <template x-for="ex in meta.examples" :key="ex">
+          <button type="button" @click="submit(ex)" x-text="ex"></button>
+        </template>
+      </div>
+      <div class="promise">
+        <div><b>Запрос словами</b>Категория, город, объём и условия — сервис поймёт сам</div>
+        <div><b>Проверка</b>Юрлицо, долги, связи, документы и сроки их действия</div>
+        <div><b>Логистика</b>Расстояние до вашей кухни и срок доставки на карте</div>
+        <div><b>Запрос КП</b>Готовое письмо каждому поставщику в его канал</div>
+      </div>
+    </div>
+
+    <!-- Результаты -->
+    <template x-if="res">
+      <div>
+        <div class="search-head">
+          <form class="query compact" @submit.prevent="submit()">
+            <label for="q2" class="sr-only">Запрос</label>
+            <textarea id="q2" x-model="query" rows="1" @keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); submit(); }"></textarea>
+            <button class="btn acc sm" type="submit">Найти</button>
+          </form>
+
+          <div class="chips" aria-label="Как понят запрос">
+            <span class="label">Понял так:</span>
+            <template x-if="criteria.product">
+              <span class="chip req"><span x-text="productName()"></span><button title="Убрать товар (оставить категорию)" @click="removeProduct()">×</button></span>
+            </template>
+            <template x-if="criteria.category && !criteria.product">
+              <span class="chip req"><span x-text="catName(criteria.category)"></span><button title="Убрать" @click="removeCategory()">×</button></span>
+            </template>
+            <span class="chip">
+              <label class="sr-only" for="city-sel">Город</label>
+              <select id="city-sel" x-model="criteria.city" @change="filters.max_distance_km = null; search()">
+                <template x-for="c in meta.cities" :key="c.key"><option :value="c.key" x-text="c.name" :selected="c.key === criteria.city"></option></template>
+              </select>
+              <span class="mut" x-text="'до ' + radiusValue + ' км'" style="padding-right:6px"></span>
+            </span>
+            <template x-if="criteria.volume_kg_month">
+              <span class="chip"><span x-text="money(criteria.volume_kg_month) + ' кг/мес'"></span><button title="Убрать" @click="removeVolume()">×</button></span>
+            </template>
+            <template x-if="criteria.max_price_rub">
+              <span class="chip"><span x-text="'до ' + money(criteria.max_price_rub) + ' ₽'"></span><button title="Убрать" @click="removePrice()">×</button></span>
+            </template>
+            <template x-for="k in criteria.required" :key="'r' + k">
+              <span class="chip req" title="Обязательно — поставщики без этого скрыты"><span x-text="condChipText(k)"></span><button title="Убрать" @click="removeCond('required', k)">×</button></span>
+            </template>
+            <template x-for="k in criteria.preferred" :key="'p' + k">
+              <span class="chip pref" title="Желательно — влияет на балл, но никого не скрывает"><span x-text="'желательно: ' + condChipText(k)"></span><button title="Убрать" @click="removeCond('preferred', k)">×</button></span>
+            </template>
+            <template x-for="k in criteria.suggestions" :key="'s' + k">
+              <button class="chip sugg" type="button" @click="acceptSuggestion(k)" title="Предложение сервиса — не применяется, пока вы не нажмёте" x-text="'+ ' + condLabel(k) + '?'"></button>
+            </template>
+            <template x-for="u in criteria.unparsed" :key="'u' + u">
+              <span class="chip unp" x-text="'не понял: «' + u + '»'"></span>
+            </template>
+            <template x-if="!criteria.volume_kg_month">
+              <span class="chip unp" title="С объёмом сервис проверит минимальную партию">укажите объём — проверю мин. партию</span>
+            </template>
+          </div>
+
+          <div class="toolbar">
+            <button class="btn ghost sm filters-toggle" @click="filtersOpen = !filtersOpen" x-text="filtersOpen ? 'Скрыть фильтры' : 'Фильтры'"></button>
+            <div>
+              <span class="lbl">Приоритет</span>
+              <div class="seg" role="group" aria-label="Приоритет">
+                <template x-for="m in meta.modes" :key="m.key">
+                  <button type="button" :aria-pressed="mode === m.key" @click="mode = m.key; search()" x-text="m.label"></button>
+                </template>
+              </div>
+            </div>
+            <label><span class="lbl">Сортировка</span>
+              <select x-model="sort" @change="search()">
+                <option value="score">по баллу</option><option value="price">по цене</option><option value="distance">по расстоянию</option>
+              </select>
+            </label>
+            <div class="seg" role="group" aria-label="Вид">
+              <button type="button" :aria-pressed="layout === 'list'" @click="layout = 'list'">Список</button>
+              <button type="button" :aria-pressed="layout === 'both'" @click="layout = 'both'">Список + карта</button>
+              <button type="button" :aria-pressed="layout === 'map'" @click="layout = 'map'">Карта</button>
+            </div>
+            <span class="total"><b x-text="res.results.length"></b> <span x-text="supWord(res.results.length)"></span><span x-show="hiddenTotal" x-text="' · скрыто ' + hiddenTotal"></span></span>
+          </div>
+        </div>
+
+        <div class="layout" :class="'v-' + layout">
+          <!-- Фильтры -->
+          <aside class="filters" :class="filtersOpen && 'open'" aria-label="Фильтры">
+            <div class="group">
+              <h3>Расстояние</h3>
+              <div class="range-row"><span x-text="'до ' + radiusValue + ' км'"></span>
+                <button class="btn link" x-show="filters.max_distance_km !== null" @click="filters.max_distance_km = null; search()">как в запросе</button></div>
+              <input type="range" min="25" max="2000" step="25" :value="radiusValue" @input="setRadius($event.target.value)" aria-label="Максимальное расстояние, км">
+              <span class="mut" x-show="filters.max_distance_km === null">+ те, кто сам возит дальше</span>
+            </div>
+            <div class="group">
+              <h3>Цена до, ₽</h3>
+              <input type="number" min="0" placeholder="без ограничения" :value="criteria.max_price_rub ?? ''" aria-label="Максимальная цена, ₽"
+                     @change="criteria.max_price_rub = $event.target.value === '' ? null : Number($event.target.value); search()">
+            </div>
+            <div class="group">
+              <h3>Обязательные условия</h3>
+              <template x-for="c in meta.conditions" :key="c.key">
+                <label class="check">
+                  <input type="checkbox" :checked="isRequired(c.key)" @change="toggleRequired(c.key)">
+                  <span x-text="c.label"></span><span class="n" x-text="res.facets[c.key] ?? ''" title="Сколько из найденных подходят"></span>
+                </label>
+              </template>
+            </div>
+            <div class="group">
+              <h3>Ещё</h3>
+              <label class="check" :class="!criteria.volume_kg_month && 'disabled'" :title="!criteria.volume_kg_month ? 'Укажите объём в запросе' : ''">
+                <input type="checkbox" x-model="filters.fit_min_order" :disabled="!criteria.volume_kg_month" @change="search()">
+                <span>Мин. партия ≤ моего объёма</span><span class="n" x-text="criteria.volume_kg_month ? res.facets.fit_min_order : ''"></span>
+              </label>
+              <label class="check">
+                <input type="checkbox" x-model="filters.hide_critical" @change="search()">
+                <span>Скрыть с критичными рисками ⛔</span>
+              </label>
+            </div>
+            <div class="group">
+              <h3>Тип</h3>
+              <label class="check"><input type="radio" name="stype" value="any" x-model="filters.supplier_type" @change="search()"><span>Все</span></label>
+              <label class="check"><input type="radio" name="stype" value="producer" x-model="filters.supplier_type" @change="search()"><span>Производители</span><span class="n" x-text="res.facets.producer"></span></label>
+              <label class="check"><input type="radio" name="stype" value="distributor" x-model="filters.supplier_type" @change="search()"><span>Дистрибьюторы</span></label>
+            </div>
+          </aside>
+
+          <!-- Список -->
+          <div class="results" x-show="layout !== 'map'" :class="loading && 'loading'">
+            <template x-if="!res.results.length">
+              <div class="notice empty">
+                <h3>Под все условия никто не подошёл</h3>
+                <p>Ослабьте одно из условий — ниже видно, что именно отсекло поставщиков.</p>
+              </div>
+            </template>
+
+            <template x-for="(r, i) in res.results" :key="r.supplier.id">
+              <article class="card" :id="'card-' + r.supplier.id" :class="{ hl: hlId === r.supplier.id, sel: isSelected(r.supplier.id) }"
+                       @click="openDetail(r.supplier.id, r)" @mouseenter="highlight(r.supplier.id)" tabindex="0" @keydown.enter.self="openDetail(r.supplier.id, r)">
+                <div class="score" :class="scoreClass(r.score)" :title="'Балл ' + r.score + ' из 100'"><span x-text="r.score"></span></div>
+                <div>
+                  <h3><span x-text="(i + 1) + '. ' + r.supplier.name"></span>
+                    <span class="tag" :class="r.supplier.type === 'producer' ? 'prod' : 'dist'" x-text="r.supplier.type === 'producer' ? 'производитель' : 'дистрибьютор'"></span></h3>
+                  <div class="meta" x-text="cityName(r.supplier.city) + ' · ' + r.logistics_text"></div>
+                  <div class="offer">
+                    <span x-show="r.offer"><b x-text="priceText(r.offer, r.supplier.currency)"></b> <span class="mut" x-text="r.offer?.name"></span></span>
+                    <span><span class="mut">мин. партия</span> <span x-text="r.supplier.min_order_kg + ' кг'"></span></span>
+                    <span x-show="r.supplier.deferral_days"><span class="mut">отсрочка</span> <span x-text="r.supplier.deferral_days + ' дн.'"></span></span>
+                  </div>
+                  <div class="why">
+                    <div>
+                      <h4>Почему он</h4>
+                      <ul>
+                        <template x-for="line in pros(r)" :key="line">
+                          <li class="ok" :data-hint="prosHint(r, line) || null" :tabindex="prosHint(r, line) ? 0 : null" x-text="line"></li>
+                        </template>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4>На что обратить внимание</h4>
+                      <ul>
+                        <template x-for="f in cons(r)" :key="f.text">
+                          <li :class="f.level" :data-hint="f.hint" tabindex="0" x-text="f.text"></li>
+                        </template>
+                        <template x-if="!cons(r).length"><li class="none">замечаний нет</li></template>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+                <div class="side" @click.stop>
+                  <label class="cmp-toggle"><input type="checkbox" :checked="isSelected(r.supplier.id)" @change="toggleSelect(r)"> Выбрать</label>
+                  <button class="btn ghost sm" @click="openDetail(r.supplier.id, r)">Подробнее</button>
+                </div>
+              </article>
+            </template>
+
+            <template x-if="hiddenTotal || res.relax.length">
+              <div class="notice">
+                <h4 x-text="'Скрыто ' + hiddenTotal + ' ' + supWord(hiddenTotal)"></h4>
+                <div x-text="res.hidden.map(h => h.reason + ' — ' + h.count).join(' · ')"></div>
+                <div class="row">
+                  <template x-for="h in res.relax" :key="h.condition">
+                    <button class="btn ghost sm" @click="relaxCond(h.condition)" x-text="'Сделать «' + h.label + '» желательным → +' + h.extra"></button>
+                  </template>
+                  <button class="btn ghost sm" x-show="criticalHidden" @click="showCritical()" x-text="'Показать с критичными рисками (' + criticalHidden + ')'"></button>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- Карта -->
+          <div class="map-wrap map-dark" x-show="layout !== 'list'">
+            <div id="map" role="region" aria-label="Карта поставщиков"></div>
+            <div class="map-offline" x-show="mapOffline">Карта недоступна без интернета — список и фильтры работают.</div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </section>
+
+  <!-- ========== ЗАПРОСЫ КП ========== -->
+  <section x-show="view === 'requests'">
+    <div class="page-head">
+      <div class="grow">
+        <h1>Запросы КП</h1>
+        <p>Кому и когда отправили запрос, что ответили. Статус и цену из КП отмечайте здесь — потом сравните полученные предложения.</p>
+      </div>
+      <button class="btn" :disabled="receivedIds.length < 2" @click="compareReceived()" :title="receivedIds.length < 2 ? 'Нужно минимум 2 полученных КП' : ''">Сравнить полученные КП</button>
+    </div>
+    <template x-if="!requests.length"><div class="notice empty"><h3>Запросов пока нет</h3><p>Найдите поставщиков и нажмите «Запросить КП».</p></div></template>
+    <template x-for="r in requests" :key="r.id">
+      <div class="kp-card">
+        <div class="kp-top">
+          <div>
+            <button class="btn link name" @click="openDetail(r.supplier_id)" x-text="r.supplier_name"></button>
+            <div class="mut" style="font-size:12px" x-text="r.product_label + ' · ' + channelDone(r.channel) + ' · ' + fmtDateTime(r.created_at)"></div>
+          </div>
+          <div>
+            <div class="stepper" aria-label="Статус">
+              <span class="st" :class="stepState(r, 'sent')"><i></i>Отправлено</span><span class="ln"></span>
+              <span class="st" :class="stepState(r, 'waiting')"><i></i>Ждём ответ</span><span class="ln"></span>
+              <span class="st" :class="stepState(r, 'received')"><i></i><span x-text="r.status === 'declined' ? 'Отказ' : 'КП получено'"></span></span>
+            </div>
+            <div class="due" :class="isOverdue(r) && 'over'" x-show="r.status === 'sent' || r.status === 'waiting'"
+                 x-text="'ждём ответ до ' + fmtDate(r.reply_due) + (r.days_waiting ? ' · прошло ' + r.days_waiting + ' дн.' : '') + (isOverdue(r) ? ' — пора напомнить' : '')"></div>
+          </div>
+          <label><span class="sr-only">Статус</span>
+            <select :value="r.status" @change="patchRequest(r, { status: $event.target.value })">
+              <template x-for="(lbl, key) in { sent: 'Отправлено', waiting: 'Ждём ответ', received: 'КП получено', declined: 'Отказ' }" :key="key">
+                <option :value="key" x-text="lbl" :selected="key === r.status"></option>
+              </template>
+            </select>
+          </label>
+          <div class="grid2" style="gap:8px">
+            <label><span class="sr-only">Цена из КП, ₽</span><input type="number" min="0" placeholder="цена из КП, ₽" :value="r.price_rub ?? ''" @change="savePrice(r, $event.target.value)"></label>
+            <label><span class="sr-only">Заметка</span><input type="text" maxlength="500" placeholder="заметка" :value="r.note ?? ''" @change="saveNote(r, $event.target.value)"></label>
+          </div>
+          <button class="icon-btn" :aria-expanded="!!openEvents[r.id]" title="История" aria-label="История" @click="openEvents[r.id] = !openEvents[r.id]">⋯</button>
+        </div>
+        <ul class="events" x-show="openEvents[r.id]">
+          <template x-for="e in r.events" :key="e.at + e.text"><li><time x-text="fmtDateTime(e.at)"></time><span x-text="e.text"></span></li></template>
+        </ul>
+      </div>
+    </template>
+  </section>
+
+  <!-- ========== КАК ЭТО РАБОТАЕТ ========== -->
+  <section x-show="view === 'about'" class="about">
+    <div class="page-head"><div class="grow"><h1>Как это работает</h1>
+      <p>Прототип для руководителя закупок сети: от потребности до запроса КП за несколько минут.</p></div></div>
+    <div class="steps">
+      <div class="step"><div class="n">01</div><h3>Запрос словами</h3><p>Фраза раскладывается на товар, город, объём, цену и условия. Обязательные условия отсекают, желательные — только влияют на балл. Предложения сервиса — пунктиром, без вашего клика не применяются.</p></div>
+      <div class="step"><div class="n">02</div><h3>Проверка и балл</h3><p>Для каждого кандидата: соответствие запросу, надёжность юрлица и документов, цена относительно медианы рынка, логистика до вашей кухни.</p></div>
+      <div class="step"><div class="n">03</div><h3>Сравнение</h3><p>2–4 поставщика в таблице: лучшее значение в строке отмечено, внизу — вывод простыми словами.</p></div>
+      <div class="step"><div class="n">04</div><h3>Запрос КП</h3><p>Письмо собирается из запроса и профиля. Каждому поставщику — в его канал. Ответы и цены — во вкладке «Запросы КП».</p></div>
+    </div>
+
+    <h2>Балл 0–100</h2>
+    <p>Балл — взвешенная сумма четырёх частей. Веса зависят от выбранного приоритета; расшифровка есть в карточке каждого поставщика.</p>
+    <div class="formula">
+      <template x-for="m in meta.modes" :key="m.key">
+        <div x-text="m.label + ': ' + Object.entries(meta.weights[m.key] || {}).map(([k, v]) => v + '% ' + partLabel(k).toLowerCase()).join(' + ')"></div>
+      </template>
+    </div>
+    <p>Критичный риск (юрлицу меньше 6 месяцев, налоговый долг, банкротство, связь с проблемной компанией, просроченная декларация) ограничивает надёжность 40 баллами и по умолчанию скрывает поставщика — с объяснением, сколько и почему скрыто.</p>
+
+    <h2>Прототип → продукт</h2>
+    <div style="overflow-x:auto">
+    <table class="t">
+      <thead><tr><th>Что</th><th>Сейчас (демо)</th><th>В продукте</th></tr></thead>
+      <tbody>
+        <tr><td>Поиск компаний</td><td>93 выдуманных поставщика в 8 городах РФ и Казахстана</td><td>2ГИС Places API / Яндекс Поиск по организациям по рубрикам и городу; фильтр по ОКВЭД 10.xx и 46.3x</td></tr>
+        <tr><td>Реквизиты и проверка</td><td>Мок-поля</td><td>DaData (ИНН, ОКВЭД, статус), Checko API (суды, ФССП, банкротства), открытые данные ФНС (долги, массовые адреса); в Казахстане — stat.gov.kz, КГД</td></tr>
+        <tr><td>Документы</td><td>Мок-декларации</td><td>Открытые реестры деклараций и сертификатов Росаккредитации (ФСА), ВетИС «Цербер»</td></tr>
+        <tr><td>Ассортимент и цены</td><td>Мок-прайсы</td><td>AI-агент читает сайт и прайс поставщика и извлекает товары, цены, мин. партию, условия — со ссылкой на источник</td></tr>
+        <tr><td>Разбор запроса и тексты</td><td>Правила и словари (без внешних API)</td><td>LLM за тем же интерфейсом (QueryParser / Explainer / KPWriter) — подключение без изменения остального кода</td></tr>
+        <tr><td>Запрос КП</td><td>Ссылки mailto / WhatsApp / Telegram, статусы вручную</td><td>Отправка из системы, разбор входящих КП (письмо, PDF) и автозаполнение цены</td></tr>
+        <tr><td>Связь с Goulash</td><td>Профиль компании вручную</td><td>Точки и адреса из ERP, объём потребности из техкарт и продаж</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h2>Демо-данные</h2>
+    <p>Можно вернуть базу к исходному состоянию: поставщики, заметки и запросы КП заполнятся заново.</p>
+    <button class="btn ghost" @click="$refs.resetDlg.showModal()">Сбросить демо-данные</button>
+  </section>
+</main>
+
+<!-- Нижняя панель выбора -->
+<div class="selbar" x-show="selected.length && view === 'search'">
+  <span x-text="'Выбрано ' + selected.length + ' из 4'"></span>
+  <span class="names">
+    <template x-for="s in selected" :key="s.id"><span class="chip"><span x-text="s.name"></span><button title="Убрать" @click="selected = selected.filter(x => x.id !== s.id)">×</button></span></template>
+  </span>
+  <button class="btn ghost sm" :disabled="selected.length < 2" @click="openCompare()" :title="selected.length < 2 ? 'Выберите минимум двух' : ''">Сравнить</button>
+  <button class="btn acc sm" @click="openKP()">Запросить КП</button>
+  <span class="warn-text" x-show="noContactSelected.length" x-text="'⚠ У ' + noContactSelected.map(s => s.name).join(', ') + ' нет e-mail и мессенджеров — только копирование текста и звонок'"></span>
+</div>
+
+<!-- Карточка поставщика -->
+<dialog class="drawer" x-ref="detailDlg" @close="detail = null" @click.self="closeDetail()" aria-labelledby="detail-title">
+  <template x-if="detail">
+    <div>
+      <div class="dlg-head">
+        <div class="score" :class="scoreClass(detail.scored?.score ?? 0)" x-show="detail.scored"><span x-text="detail.scored?.score"></span></div>
+        <div class="grow">
+          <h2 id="detail-title" x-text="detail.supplier.name"></h2>
+          <div class="mut" x-text="(detail.supplier.type === 'producer' ? 'Производитель' : 'Дистрибьютор') + ' · ' + cityName(detail.supplier.city) + (detail.scored ? ' · ' + detail.scored.logistics_text : '')"></div>
+        </div>
+        <button class="icon-btn" @click="closeDetail()" aria-label="Закрыть">×</button>
+      </div>
+      <div class="dlg-body">
+
+        <div class="sec" x-show="detail.scored">
+          <h3>Почему такой балл <span class="src" x-text="'приоритет: ' + (meta.modes.find(m => m.key === mode)?.label || '')"></span></h3>
+          <div class="bars">
+            <template x-for="p in ['match', 'reliability', 'price', 'logistics']" :key="p">
+              <div class="bar"><span x-text="partLabel(p)"></span>
+                <div class="track"><div class="fill" :style="'width:' + (detail.scored?.parts[p] ?? 0) + '%'"></div></div>
+                <span class="v" x-text="(detail.scored?.parts[p] ?? 0) + ' × ' + partWeight(p) + '%'"></span></div>
+            </template>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h3>Надёжность компании <span class="src" x-text="'данные на ' + fmtDate(detail.reliability.as_of)"></span></h3>
+          <div class="verdict" :class="detail.reliability.verdict">
+            <b x-text="'Надёжность: ' + ({ high: 'высокая', medium: 'средняя', low: 'низкая' })[detail.reliability.verdict]"></b>
+            <span x-text="'⛔ ' + detail.reliability.counts.bad + ' · ⚠ ' + detail.reliability.counts.warn + ' · ✓ ' + detail.reliability.counts.ok"></span>
+          </div>
+          <div class="tabs" role="group" aria-label="Фильтр фактов">
+            <button :aria-pressed="factTab === 'all'" @click="factTab = 'all'">Все</button>
+            <button :aria-pressed="factTab === 'bad'" @click="factTab = 'bad'" x-text="'⛔ ' + detail.reliability.counts.bad"></button>
+            <button :aria-pressed="factTab === 'warn'" @click="factTab = 'warn'" x-text="'⚠ ' + detail.reliability.counts.warn"></button>
+            <button :aria-pressed="factTab === 'ok'" @click="factTab = 'ok'" x-text="'✓ ' + detail.reliability.counts.ok"></button>
+          </div>
+          <template x-for="g in detail.reliability.groups" :key="g.title">
+            <div class="fact-group" x-show="facts(g).length">
+              <h4><span class="dot" :class="g.level"></span><span x-text="g.title"></span></h4>
+              <div class="why" style="grid-template-columns:1fr;margin:0">
+                <ul><template x-for="f in facts(g)" :key="f.text"><li :class="f.level" :data-hint="f.hint" tabindex="0" x-text="f.text"></li></template></ul>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div class="sec">
+          <h3>Контакты <span class="src" x-text="srcText('contacts')"></span></h3>
+          <dl class="kv">
+            <dt>Телефон</dt><dd><template x-if="detail.supplier.phone"><a :href="'tel:' + detail.supplier.phone" x-text="detail.supplier.phone"></a></template><span class="nodata" x-show="!detail.supplier.phone">Нет данных — уточнить в КП</span></dd>
+            <dt>E-mail</dt><dd><span x-text="detail.supplier.email || ''"></span><span class="nodata" x-show="!detail.supplier.email">Нет данных</span></dd>
+            <dt>WhatsApp</dt><dd><span x-text="detail.supplier.whatsapp || ''"></span><span class="nodata" x-show="!detail.supplier.whatsapp">Нет данных</span></dd>
+            <dt>Telegram</dt><dd><span x-text="detail.supplier.telegram || ''"></span><span class="nodata" x-show="!detail.supplier.telegram">Нет данных</span></dd>
+            <dt>Сайт</dt><dd><span x-text="detail.supplier.website || ''"></span><span class="nodata" x-show="!detail.supplier.website">Нет данных</span></dd>
+            <dt>Адрес</dt><dd x-text="detail.supplier.address"></dd>
+          </dl>
+        </div>
+
+        <div class="sec">
+          <h3>Ассортимент и цены <span class="src" x-text="srcText('prices')"></span></h3>
+          <table class="t">
+            <template x-for="p in detail.supplier.products" :key="p.key">
+              <tr><td x-text="p.name"></td><td class="mut" x-text="catName(p.category)"></td><td style="text-align:right" x-text="priceText(p, detail.supplier.currency)"></td></tr>
+            </template>
+          </table>
+        </div>
+
+        <div class="sec">
+          <h3>Условия <span class="src" x-text="srcText('logistics')"></span></h3>
+          <dl class="kv">
+            <dt>Мин. партия</dt><dd x-text="detail.supplier.min_order_kg + ' кг'"></dd>
+            <dt>Доставка</dt><dd x-text="(detail.supplier.own_delivery ? 'своя' : 'самовывоз / ТК') + (detail.supplier.cold_chain ? ', с холодом' : '') + ', ' + detail.supplier.delivery_days + ' дн., радиус ' + detail.supplier.delivery_radius_km + ' км'"></dd>
+            <dt>График</dt><dd><span x-text="detail.supplier.delivery_schedule || ''"></span><span class="nodata" x-show="!detail.supplier.delivery_schedule">Нет данных — уточнить в КП</span></dd>
+            <dt>Оплата</dt><dd>
+              <span x-show="detail.supplier.deferral_days != null" x-text="detail.supplier.deferral_days ? 'отсрочка ' + detail.supplier.deferral_days + ' дн.' : 'без отсрочки'"></span>
+              <span class="nodata" x-show="detail.supplier.deferral_days == null">Нет данных об отсрочке — уточнить в КП</span>
+              <span x-show="detail.supplier.prepay_required">, предоплата</span></dd>
+          </dl>
+        </div>
+
+        <div class="sec">
+          <h3>Документы <span class="src" x-text="srcText('documents')"></span></h3>
+          <template x-if="!detail.supplier.documents.length"><p class="nodata">Нет данных — уточнить в КП</p></template>
+          <div class="why" style="grid-template-columns:1fr;margin:0"><ul>
+            <template x-for="d in detail.supplier.documents" :key="d.kind + (d.number || '')">
+              <li :class="docStatus(d).cls"><span><span x-text="docLabel(d.kind)"></span><span class="mut" x-show="d.number" x-text="' · ' + d.number"></span> — <span x-text="docStatus(d).text"></span></span></li>
+            </template>
+          </ul></div>
+        </div>
+
+        <div class="sec">
+          <h3>Реквизиты <span class="src" x-text="srcText('legal')"></span></h3>
+          <dl class="kv">
+            <dt>Юрлицо</dt><dd x-text="detail.supplier.legal_name"></dd>
+            <dt x-text="detail.supplier.country === 'KZ' ? 'БИН' : 'ИНН'"></dt><dd x-text="detail.supplier.inn"></dd>
+            <dt>Год основания</dt><dd x-text="new Date(detail.supplier.founded).getFullYear()"></dd>
+            <dt>Сотрудники</dt><dd x-text="detail.supplier.employees"></dd>
+            <dt>Выручка</dt><dd><span x-show="detail.supplier.revenue_mln_rub != null" x-text="money(detail.supplier.revenue_mln_rub) + ' млн ₽'"></span><span class="nodata" x-show="detail.supplier.revenue_mln_rub == null">Нет данных</span></dd>
+            <dt>Отзывы</dt><dd><span x-show="detail.supplier.rating" x-text="detail.supplier.rating + ' ★ · ' + detail.supplier.reviews_count + ' отзывов'"></span><span class="nodata" x-show="!detail.supplier.rating">Нет данных</span></dd>
+          </dl>
+        </div>
+
+        <div class="sec">
+          <h3>Заметки команды</h3>
+          <template x-for="n in detail.notes" :key="n.id">
+            <div class="note"><div x-text="n.text"></div><div class="who" x-text="n.author + ' · ' + fmtDate(n.created_at)"></div></div>
+          </template>
+          <p class="mut" x-show="!detail.notes.length">Заметок пока нет — запишите впечатления после звонка или дегустации.</p>
+          <form @submit.prevent="addNote()" style="display:flex;gap:8px;margin-top:10px">
+            <label class="sr-only" for="note-input">Заметка</label>
+            <input id="note-input" style="flex:1;background:var(--bg-input);border:1px solid var(--line-2);border-radius:8px;padding:8px 10px" maxlength="2000" x-model="noteText" placeholder="Например: дегустация 4/5, хорошо тянется">
+            <button class="btn sm" :disabled="!noteText.trim()">Добавить</button>
+          </form>
+        </div>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn acc" @click="openKP([{ id: detail.supplier.id, name: detail.supplier.name, preferred_channel: detail.supplier.preferred_channel }])">Запросить КП</button>
+        <button class="btn ghost" x-show="res" @click="detailSelect()" :disabled="isSelected(detail.supplier.id)" x-text="isSelected(detail.supplier.id) ? 'Уже выбран' : 'Выбрать для сравнения'"></button>
+      </div>
+    </div>
+  </template>
+</dialog>
+
+<!-- Сравнение -->
+<dialog x-ref="compareDlg" @close="compare = null" aria-labelledby="cmp-title">
+  <template x-if="compare">
+    <div>
+      <div class="dlg-head"><div class="grow"><h2 id="cmp-title">Сравнение поставщиков</h2><div class="mut">★ — лучшее значение в строке</div></div>
+        <button class="icon-btn" @click="$refs.compareDlg.close()" aria-label="Закрыть">×</button></div>
+      <div class="dlg-body">
+        <div style="overflow-x:auto">
+          <table class="t">
+            <thead><tr><th></th><template x-for="x in compare.items" :key="x.supplier.id"><th style="color:var(--txt);font-weight:600" x-text="x.supplier.name"></th></template></tr></thead>
+            <tbody>
+              <template x-for="row in cmpRows()" :key="row.key">
+                <tr><th x-text="row.label"></th>
+                  <template x-for="(v, i) in row.vals" :key="i"><td :class="isBest(row.key, i) && 'best'" x-text="v"></td></template></tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <div class="conclusion" x-text="compare.conclusion"></div>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn acc" @click="openKP(compare.items.map(x => ({ id: x.supplier.id, name: x.supplier.name, preferred_channel: x.supplier.preferred_channel })))">Запросить КП у этих поставщиков</button>
+        <button class="btn ghost" @click="$refs.compareDlg.close()">Закрыть</button>
+      </div>
+    </div>
+  </template>
+</dialog>
+
+<!-- Запрос КП -->
+<dialog x-ref="kpDlg" @close="kp = null" aria-labelledby="kp-title">
+  <template x-if="kp">
+    <div>
+      <div class="dlg-head"><div class="grow"><h2 id="kp-title" x-text="'Запросить КП · ' + kp.rows.length + ' ' + supWord(kp.rows.length)"></h2>
+        <div class="mut">Письмо собрано из вашего запроса и профиля. Каждому поставщику — в его канал.</div></div>
+        <button class="icon-btn" @click="finishKP()" aria-label="Закрыть">×</button></div>
+      <div class="dlg-body">
+        <div>
+          <template x-for="row in kp.rows" :key="row.supplier.id">
+            <div class="kp-row">
+              <div><div class="name" x-text="row.supplier.name"></div><div class="contact" x-text="contactFor(row)"></div></div>
+              <label><span class="sr-only">Канал</span>
+                <select x-model="row.channel" :disabled="!!row.sent" style="width:100%;background:var(--bg-input);border:1px solid var(--line-2);border-radius:8px;padding:6px 9px">
+                  <template x-for="c in channelsFor(row.supplier)" :key="c"><option :value="c" x-text="channelLabel(c)" :selected="c === row.channel"></option></template>
+                </select>
+              </label>
+              <div>
+                <template x-if="!row.sent"><button class="btn acc sm" @click="sendRow(row)" x-text="row.channel === 'copy' ? 'Скопировать' : 'Отправить'"></button></template>
+                <template x-if="row.sent"><span class="sent-mark" x-text="'✓ ждём ответ до ' + fmtDate(row.sent.reply_due)"></span></template>
+              </div>
+            </div>
+          </template>
+        </div>
+        <label class="field">Тема<input x-model="kp.subject" maxlength="200"></label>
+        <label class="field">Текст письма<textarea x-model="kp.body" rows="14"></textarea></label>
+      </div>
+      <div class="dlg-foot">
+        <button class="btn" @click="finishKP()" x-text="kpSentCount ? 'Готово' : 'Закрыть'"></button>
+        <button class="btn ghost" @click="copyText()">Скопировать текст</button>
+        <span class="mut" style="align-self:center;font-size:12px">В прототипе «Отправить» открывает почту или мессенджер с готовым текстом и сохраняет запрос во вкладке «Запросы КП».</span>
+      </div>
+    </div>
+  </template>
+</dialog>
+
+<!-- Профиль -->
+<dialog x-ref="profileDlg" @close="profileForm = null" aria-labelledby="pf-title" style="width:min(560px, calc(100vw - 32px))">
+  <template x-if="profileForm">
+    <form @submit.prevent="saveProfile()">
+      <div class="dlg-head"><div class="grow"><h2 id="pf-title">Профиль компании</h2><div class="mut">Подставляется в письма и задаёт точку доставки на карте.</div></div>
+        <button type="button" class="icon-btn" @click="$refs.profileDlg.close()" aria-label="Закрыть">×</button></div>
+      <div class="dlg-body">
+        <label class="field">Компания / сеть<input x-model="profileForm.company" required maxlength="200"></label>
+        <div class="grid2">
+          <label class="field">Город<select x-model="profileForm.city"><template x-for="c in meta.cities" :key="c.key"><option :value="c.key" x-text="c.name" :selected="c.key === profileForm.city"></option></template></select></label>
+          <label class="field">Точек в сети<input type="number" min="1" x-model="profileForm.points" required></label>
+        </div>
+        <label class="field">Адрес кухни / склада<input x-model="profileForm.address" required maxlength="300"></label>
+        <label class="field">Контактное лицо<input x-model="profileForm.contact_name" maxlength="200"></label>
+        <div class="grid2">
+          <label class="field">Телефон<input x-model="profileForm.phone" maxlength="50" autocomplete="tel"></label>
+          <label class="field">E-mail<input type="email" x-model="profileForm.email" maxlength="200" autocomplete="email"></label>
+        </div>
+        <p class="mut" style="margin:0;font-size:12px">Геокодера в прототипе нет: при смене адреса точкой доставки становится центр города.</p>
+      </div>
+      <div class="dlg-foot"><button class="btn acc" type="submit">Сохранить</button><button class="btn ghost" type="button" @click="$refs.profileDlg.close()">Отмена</button></div>
+    </form>
+  </template>
+</dialog>
+
+<!-- Подтверждение сброса -->
+<dialog x-ref="resetDlg" aria-labelledby="reset-title" style="width:min(460px, calc(100vw - 32px))">
+  <div class="dlg-head"><div class="grow"><h2 id="reset-title">Сбросить демо-данные?</h2></div></div>
+  <div class="dlg-body"><p style="margin:0">Ваши заметки, запросы КП и изменения профиля удалятся, база заполнится заново.</p></div>
+  <div class="dlg-foot"><button class="btn acc" @click="resetDemo()">Сбросить</button><button class="btn ghost" @click="$refs.resetDlg.close()">Отмена</button></div>
+</dialog>
+
+<div class="toast" popover="manual" x-ref="toast" role="status" x-text="toastText"></div>
+</body>
+</html>
