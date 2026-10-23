@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: goulash-suppliers
+    runtime: docker
+    repo: https://github.com/VovaArrow/goulash_test.git
+    branch: feature/supplier-search
+    plan: 0.5c-512mb
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/meta
+    numInstances: 1
+    autoDeployTrigger: commit
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: GOULASH_PUBLIC_DEMO
+        value: "1"
+      - key: GOULASH_DB
+        value: /data/goulash.db
+      - key: GOULASH_SESSIONS_DIR
+        value: /data/sessions
+    disk:
+      name: goulash-data
+      mountPath: /data
+      sizeGB: 1

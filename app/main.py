@@ -25,7 +25,10 @@ def create_app(db_path: str | None = None, *, public_demo: bool | None = None) -
     path = db_path or os.environ.get("GOULASH_DB", "data/goulash.db")
 
     public = public_demo if public_demo is not None else os.environ.get("GOULASH_PUBLIC_DEMO") == "1"
-    public_origin = os.environ.get("GOULASH_PUBLIC_ORIGIN", "").rstrip("/") if public else ""
+    public_origin = (
+        os.environ.get("GOULASH_PUBLIC_ORIGIN")
+        or os.environ.get("RENDER_EXTERNAL_URL", "")
+    ).rstrip("/") if public else ""
     if public_origin:
         origin_parts = urlsplit(public_origin)
         if (origin_parts.scheme not in ("https", "http") or not origin_parts.netloc

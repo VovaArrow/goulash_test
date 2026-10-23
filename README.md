@@ -38,6 +38,10 @@ make run       # http://localhost:8000
 
 Для CodeSandbox подготовлены Python 3.12 devcontainer, задачи установки/автозапуска и `requirements.txt` из lock-файла. [Инструкция переноса в Python Devbox](CODESANDBOX.md).
 
+Для постоянного размещения на Render подготовлен [`render.yaml`](render.yaml): Docker web service в Frankfurt, один экземпляр `0.5c-512mb`, постоянный диск 1 ГБ для SQLite и сессий, health check `/api/meta`. Это платные вычислительные ресурсы и диск; актуальную стоимость Render показывает перед созданием. Публичный Origin определяется автоматически из `RENDER_EXTERNAL_URL`, отдельно вводить домен не нужно.
+
+[Развернуть на Render](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2FVovaArrow%2Fgoulash_test%2Ftree%2Ffeature%2Fsupplier-search)
+
 Для сервера:
 
 ```bash

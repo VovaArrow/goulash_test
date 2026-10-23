@@ -119,6 +119,16 @@ def test_public_origin_rejects_urls_with_paths(tmp_path, monkeypatch):
         create_app(str(tmp_path / 'base.db'), public_demo=True)
 
 
+def test_render_external_url_sets_canonical_origin_and_secure_cookie(tmp_path, monkeypatch):
+    monkeypatch.delenv('GOULASH_PUBLIC_ORIGIN', raising=False)
+    monkeypatch.setenv('RENDER_EXTERNAL_URL', 'https://goulash.onrender.com')
+    with TestClient(create_app(str(tmp_path / 'base.db'), public_demo=True)) as visitor:
+        reply = visitor.post('/api/parse', headers={'Origin': 'https://goulash.onrender.com'}, json={'text': 'рис'})
+        assert reply.status_code == 200
+        assert 'Secure' in reply.headers['set-cookie']
+        assert visitor.post('/api/parse', headers={'Origin': 'https://other.example'}, json={'text': 'рис'}).status_code == 403
+
+
 def test_compression_and_asset_cache_do_not_cache_private_responses(client):
     response = client.get('/api/real-case', headers={'Accept-Encoding': 'gzip'})
     assert response.headers['content-encoding'] == 'gzip'
