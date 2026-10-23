@@ -56,8 +56,9 @@ def _declaration(s: Supplier) -> date | None | bool:
     return None if None in dates else max(dates)
 
 
-def _has(s: Supplier, kind: str) -> bool:
-    return any(d.kind == kind for d in s.documents)
+def _has(s: Supplier, kind: str, today: date) -> bool:
+    return any(d.kind == kind and (d.valid_until is None or d.valid_until >= today)
+               for d in s.documents)
 
 
 def _is_chilled(s: Supplier, offer: Product | None) -> bool:
@@ -85,10 +86,12 @@ def satisfies(s: Supplier, cond: str, c: Criteria, today: date) -> float:
         valid = _declaration(s)
         return 1.0 if valid is None or (valid and valid >= today) else 0.0
     if cond in ("mercury", "halal", "chestny_znak"):
-        return 1.0 if _has(s, cond) else 0.0
+        return 1.0 if _has(s, cond, today) else 0.0
     if cond == "haccp":
         return 1.0 if any(d.kind == "haccp" and (d.valid_until is None or d.valid_until >= today)
                           for d in s.documents) else 0.0
+    if cond == "no_prepay":
+        return 0.0 if s.prepay_required else 1.0
     if cond == "own_delivery":
         return 1.0 if s.own_delivery else 0.0
     if cond == "cold_chain":
@@ -174,14 +177,19 @@ def _company_facts(s: Supplier, today: date) -> dict[str, list[Flag]]:
         until = f" до {_fmt_month(valid)}" if valid else ""
         docs.append(Flag(level="ok", text=f"декларации{until}", hint="Реестр деклараций Росаккредитации (демо)."))
     if set(s.categories) & ANIMAL_CATEGORIES:
-        if _has(s, "mercury"):
+        if _has(s, "mercury", today):
             docs.append(Flag(level="ok", text="Меркурий (ВСД)", hint="Площадка зарегистрирована в ВетИС «Цербер» (демо)."))
         else:
             docs.append(Flag(level="warn", text="нет данных о «Меркурии»", hint="Площадка не найдена в ВетИС «Цербер» (демо)."))
-    if _has(s, "haccp"):
+    if _has(s, "haccp", today):
         docs.append(Flag(level="ok", text="ХАССП", hint="Сертификат системы ХАССП (демо)."))
     else:
-        docs.append(Flag(level="warn", text="ХАССП — нет данных", hint="Сертификат не найден — уточните в КП."))
+        expired = any(d.kind == "haccp" for d in s.documents)
+        docs.append(Flag(level="warn", text="ХАССП — срок истёк" if expired else "ХАССП — нет данных",
+                         hint="Действующий сертификат не найден — уточните в КП."))
+    for kind, label in (("halal", "Халяль"), ("mercury", "Меркурий"), ("chestny_znak", "Честный знак")):
+        if any(d.kind == kind for d in s.documents) and not _has(s, kind, today):
+            docs.append(Flag(level="warn", text=f"{label} — срок истёк", hint="Запросите действующий документ."))
     return {"Регистрация и возраст": reg, "Налоги и долги": taxes, "Суды и банкротство": courts,
             "Связи и адрес": links, "Документы на продукцию": docs}
 
@@ -279,9 +287,9 @@ def _reliability_part(s: Supplier, today: date) -> int:
         score += 10
     elif valid:
         score -= 30
-    if set(s.categories) & ANIMAL_CATEGORIES and _has(s, "mercury"):
+    if set(s.categories) & ANIMAL_CATEGORIES and _has(s, "mercury", today):
         score += 5
-    score += 10 if _has(s, "haccp") else 0
+    score += 10 if _has(s, "haccp", today) else 0
     score += 5 if s.rating is not None and s.rating >= 4.5 else 0
     score -= 10 if s.lawsuits >= 5 else 0
     score -= 15 if s.mass_address else 0

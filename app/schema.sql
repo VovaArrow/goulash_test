@@ -77,7 +77,9 @@ CREATE TABLE IF NOT EXISTS kp_requests (
     status        TEXT NOT NULL,
     price_rub     REAL,
     note          TEXT,
-    created_at    TEXT NOT NULL
+    created_at    TEXT NOT NULL,
+    criteria      TEXT,
+    sent_at       TEXT
 );
 
 CREATE TABLE IF NOT EXISTS kp_events (
@@ -100,3 +102,26 @@ CREATE TABLE IF NOT EXISTS profile (
     email        TEXT NOT NULL,
     points       INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS collections (
+    id INTEGER PRIMARY KEY,
+    search_key TEXT NOT NULL UNIQUE,
+    source TEXT NOT NULL CHECK (source IN ('demo', 'real')),
+    title TEXT NOT NULL,
+    search_request TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS collection_members (
+    id INTEGER PRIMARY KEY,
+    collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    supplier_key TEXT NOT NULL,
+    snapshot TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'selected' CHECK (status IN ('selected', 'sent', 'received')),
+    price_rub REAL,
+    terms TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    legacy_kp_id INTEGER UNIQUE REFERENCES kp_requests(id) ON DELETE SET NULL,
+    UNIQUE (collection_id, supplier_key)
+);
+CREATE INDEX IF NOT EXISTS idx_collection_members_collection ON collection_members(collection_id);

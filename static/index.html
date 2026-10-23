@@ -5,37 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Goulash · Поставщики</title>
   <meta name="description" content="Поиск и сравнение поставщиков продуктов питания для сетей общепита: запрос словами, проверка, сравнение, запрос КП.">
-  <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="/static/logo.svg?v=2" type="image/svg+xml">
   <link rel="stylesheet" href="/static/vendor/leaflet.css">
   <link rel="stylesheet" href="/static/styles.css">
-  <script src="/static/vendor/leaflet.js"></script>
-  <script src="/static/app.js"></script>
+  <script defer src="/static/vendor/leaflet.js"></script>
+  <script defer src="/static/app.js"></script>
   <script defer src="/static/vendor/alpine.min.js"></script>
 </head>
 <body x-data="app" x-cloak>
 
 <header class="top">
   <a class="logo" href="/" @click.prevent="reset()">
-    <svg viewBox="0 0 28 28" aria-hidden="true">
-      <rect width="28" height="28" rx="7" fill="#21FFFF"/>
-      <rect x="6" y="6" width="16" height="16" rx="4" fill="#0E4D4F"/>
-      <rect x="9.5" y="9.5" width="9" height="9" rx="2" fill="#21FFFF"/>
-      <rect x="14" y="12" width="4.5" height="4" fill="#0E4D4F"/>
-    </svg>
-    Goulash.tech <span class="sub">· Поставщики</span>
+    <img class="logo-mark" src="/static/logo.svg?v=2" width="32" height="32" alt="">
+    <span class="logo-wordmark">Goulash.tech</span><span class="sub">· Поставщики</span>
   </a>
   <nav class="nav" aria-label="Разделы">
     <button :aria-current="view === 'search' ? 'page' : null" @click="view = 'search'">Поиск</button>
-    <button :aria-current="view === 'requests' ? 'page' : null" @click="view = 'requests'">
-      Запросы КП<span class="count" x-show="waitingCount" x-text="waitingCount"></span>
+    <button :aria-current="view === 'collections' ? 'page' : null" @click="view = 'collections'">
+      Мои подборки<span class="count" x-show="collections.length" x-text="collections.length"></span>
     </button>
+    <button :aria-current="view === 'real' ? 'page' : null" @click="openRealCase()">Реальный пример</button>
     <button :aria-current="view === 'about' ? 'page' : null" @click="view = 'about'">Как это работает</button>
   </nav>
   <div class="spacer"></div>
-  <span class="demo-badge" title="Компании, ИНН и контакты выдуманы. Реальные источники описаны в разделе «Как это работает».">демо-данные</span>
+  <span class="demo-badge" x-text="view === 'real' ? 'открытые источники' : 'демо-данные'" :title="view === 'real' ? 'Сохранённый срез сайтов реальных компаний, дата проверки указана в сценарии.' : 'В обычном поиске компании и контакты выдуманы. Во вкладке «Реальный пример» — сведения из открытых сайтов.'"></span>
   <button class="profile-btn" @click="openProfile()" x-show="profile">
     <span x-text="profile?.company"></span>
     <small x-text="profile ? cityName(profile.city) + ' · ' + profile.points + ' точек' : ''"></small>
@@ -49,9 +42,7 @@
 
     <!-- Пустое состояние -->
     <div class="hero" x-show="!res">
-      <p class="eyebrow">Подбор поставщиков для сетей общепита и готовой еды</p>
-      <h1>Найдите поставщика за минуту</h1>
-      <p class="lead">Опишите, что нужно, как написали бы коллеге. Сервис разберёт запрос, проверит компании и документы, сравнит условия и подскажет, кому писать первым.</p>
+      <h1>Найдите и сравните поставщиков для вашей сети за минуту.</h1>
       <form class="query" @submit.prevent="submit()">
         <label for="q" class="sr-only">Что ищем</label>
         <textarea id="q" x-model="query" rows="2" placeholder="Например: моцарелла для пиццы в Екатеринбург, ~200 кг в месяц, обязательно декларации"
@@ -65,6 +56,9 @@
           <button type="button" @click="submit(ex)" x-text="ex"></button>
         </template>
       </div>
+      <button class="real-entry" @click="openRealCase()">
+        <span><b>Посмотреть реальный подбор</b><small>Моцарелла · Екатеринбург · 5 компаний со ссылками на источники</small></span><span aria-hidden="true">↗</span>
+      </button>
       <div class="promise">
         <div><b>Запрос словами</b>Категория, город, объём и условия — сервис поймёт сам</div>
         <div><b>Проверка</b>Юрлицо, долги, связи, документы и сроки их действия</div>
@@ -93,7 +87,8 @@
             </template>
             <span class="chip">
               <label class="sr-only" for="city-sel">Город</label>
-              <select id="city-sel" x-model="criteria.city" @change="filters.max_distance_km = null; search()">
+              <select id="city-sel" x-model="criteria.city" @change="criteria.location_unresolved = false; filters.max_distance_km = null; search()">
+                <option value="" disabled x-show="criteria.location_unresolved">Выберите город</option>
                 <template x-for="c in meta.cities" :key="c.key"><option :value="c.key" x-text="c.name" :selected="c.key === criteria.city"></option></template>
               </select>
               <span class="mut" x-text="'до ' + radiusValue + ' км'" style="padding-right:6px"></span>
@@ -151,7 +146,7 @@
             <div class="group">
               <h3>Расстояние</h3>
               <div class="range-row"><span x-text="'до ' + radiusValue + ' км'"></span>
-                <button class="btn link" x-show="filters.max_distance_km !== null" @click="filters.max_distance_km = null; search()">как в запросе</button></div>
+                <button class="btn link" x-show="filters.max_distance_km !== null" @click="criteria.location_unresolved = false; filters.max_distance_km = null; search()">как в запросе</button></div>
               <input type="range" min="25" max="2000" step="25" :value="radiusValue" @input="setRadius($event.target.value)" aria-label="Максимальное расстояние, км">
               <span class="mut" x-show="filters.max_distance_km === null">+ те, кто сам возит дальше</span>
             </div>
@@ -261,49 +256,129 @@
     </template>
   </section>
 
-  <!-- ========== ЗАПРОСЫ КП ========== -->
-  <section x-show="view === 'requests'">
-    <div class="page-head">
-      <div class="grow">
-        <h1>Запросы КП</h1>
-        <p>Кому и когда отправили запрос, что ответили. Статус и цену из КП отмечайте здесь — потом сравните полученные предложения.</p>
-      </div>
-      <button class="btn" :disabled="receivedIds.length < 2" @click="compareReceived()" :title="receivedIds.length < 2 ? 'Нужно минимум 2 полученных КП' : ''">Сравнить полученные КП</button>
-    </div>
-    <template x-if="!requests.length"><div class="notice empty"><h3>Запросов пока нет</h3><p>Найдите поставщиков и нажмите «Запросить КП».</p></div></template>
-    <template x-for="r in requests" :key="r.id">
-      <div class="kp-card">
-        <div class="kp-top">
-          <div>
-            <button class="btn link name" @click="openDetail(r.supplier_id)" x-text="r.supplier_name"></button>
-            <div class="mut" style="font-size:12px" x-text="r.product_label + ' · ' + channelDone(r.channel) + ' · ' + fmtDateTime(r.created_at)"></div>
-          </div>
-          <div>
-            <div class="stepper" aria-label="Статус">
-              <span class="st" :class="stepState(r, 'sent')"><i></i>Отправлено</span><span class="ln"></span>
-              <span class="st" :class="stepState(r, 'waiting')"><i></i>Ждём ответ</span><span class="ln"></span>
-              <span class="st" :class="stepState(r, 'received')"><i></i><span x-text="r.status === 'declined' ? 'Отказ' : 'КП получено'"></span></span>
-            </div>
-            <div class="due" :class="isOverdue(r) && 'over'" x-show="r.status === 'sent' || r.status === 'waiting'"
-                 x-text="'ждём ответ до ' + fmtDate(r.reply_due) + (r.days_waiting ? ' · прошло ' + r.days_waiting + ' дн.' : '') + (isOverdue(r) ? ' — пора напомнить' : '')"></div>
-          </div>
-          <label><span class="sr-only">Статус</span>
-            <select :value="r.status" @change="patchRequest(r, { status: $event.target.value })">
-              <template x-for="(lbl, key) in { sent: 'Отправлено', waiting: 'Ждём ответ', received: 'КП получено', declined: 'Отказ' }" :key="key">
-                <option :value="key" x-text="lbl" :selected="key === r.status"></option>
-              </template>
-            </select>
-          </label>
-          <div class="grid2" style="gap:8px">
-            <label><span class="sr-only">Цена из КП, ₽</span><input type="number" min="0" placeholder="цена из КП, ₽" :value="r.price_rub ?? ''" @change="savePrice(r, $event.target.value)"></label>
-            <label><span class="sr-only">Заметка</span><input type="text" maxlength="500" placeholder="заметка" :value="r.note ?? ''" @change="saveNote(r, $event.target.value)"></label>
-          </div>
-          <button class="icon-btn" :aria-expanded="!!openEvents[r.id]" title="История" aria-label="История" @click="openEvents[r.id] = !openEvents[r.id]">⋯</button>
+  <!-- ========== РЕАЛЬНЫЙ СЦЕНАРИЙ ========== -->
+  <section x-show="view === 'real'" class="real-page" aria-labelledby="real-title" :aria-busy="realLoading">
+    <p role="status" x-show="realLoading">Загружаем сведения из проверенных страниц…</p>
+    <div class="notice" x-show="realError" role="alert"><p x-text="realError"></p><button class="btn" @click="openRealCase()">Повторить</button></div>
+    <template x-if="realCase">
+      <div>
+        <div class="page-head real-head"><div class="grow">
+          <p class="real-kicker">Реальный пример · открытые источники</p>
+          <h1 id="real-title" x-text="realCase.title"></h1>
+          <p x-text="realCase.query"></p>
+        </div><span class="real-date" x-text="'Проверено ' + fmtDate(realCase.checked_at)"></span></div>
+        <p class="real-method" x-text="realCase.method"></p>
+        <div class="real-verdict"><h2>Кому написать первым</h2><p x-text="realCase.conclusion"></p></div>
+        <div class="real-actions"><button class="btn" :disabled="!realSelected.length || pendingSaves > 0" @click="persistSelection('real', realSelected).then(c => { view = 'collections'; toggleCollection(c); }).catch(e => toast(e.message))">Сохранить выбранных в подборку</button></div>
+        <div class="real-list-heading"><h2>5 компаний и основания отбора</h2><p>Реквизиты сопоставлены с сайтами, документами и открытыми карточками контрагентов. У каждого факта есть источник и дата просмотра.</p></div>
+        <div class="real-suppliers">
+          <template x-for="s in realCase.suppliers" :key="s.id">
+            <article class="real-supplier" :aria-labelledby="'real-' + s.id">
+              <div class="real-supplier-head"><div><span class="real-decision" :class="s.decision" x-text="s.decision_label"></span><h3 :id="'real-' + s.id" x-text="s.name"></h3><span class="mut" x-text="s.kind"></span></div>
+                <label class="cmp-toggle"><input type="checkbox" :checked="realSelected.includes(s.id)" @change="toggleRealSupplier(s.id); $event.target.checked = realSelected.includes(s.id)"> Сравнить</label></div>
+              <p class="real-reason" x-text="s.reason"></p>
+              <section class="real-company" :aria-labelledby="'real-company-' + s.id">
+                <h4 :id="'real-company-' + s.id">Компания и реквизиты</h4>
+                <dl class="real-facts real-company-facts">
+                  <template x-for="f in s.company_facts" :key="f.key">
+                    <div><dt x-text="f.label"></dt><dd :class="!f.value && 'real-unknown'">
+                      <span x-text="f.value || f.missing_reason || 'Не проверено в открытых источниках.'"></span>
+                      <span class="real-source-links"><template x-for="id in f.source_ids" :key="id"><a :href="realSource(s, id).url" target="_blank" rel="noopener noreferrer" x-text="realSource(s, id).title + ' · ' + fmtDate(realSource(s, id).checked_at) + ' ↗'"></a></template></span>
+                    </dd></div>
+                  </template>
+                </dl>
+              </section>
+              <h4 class="real-commercial-title">Товар и условия поставки</h4>
+              <dl class="real-facts">
+                <template x-for="f in s.facts" :key="f.key">
+                  <div><dt x-text="f.label"></dt><dd :class="!f.value && 'real-unknown'">
+                    <span x-text="f.value || f.missing_reason || 'Не опубликовано в просмотренных источниках. Уточнить в КП.'"></span>
+                    <span class="real-source-links"><template x-for="id in f.source_ids" :key="id"><a :href="realSource(s, id).url" target="_blank" rel="noopener noreferrer" :aria-label="f.label + ': ' + realSource(s, id).title + ', ' + fmtDate(realSource(s, id).checked_at)" x-text="realSource(s, id).title + ' · ' + fmtDate(realSource(s, id).checked_at) + ' ↗'"></a></template></span>
+                  </dd></div>
+                </template>
+              </dl>
+              <div class="real-caveats"><h4>Что уточнить</h4><ul><template x-for="c in s.caveats" :key="c"><li x-text="c"></li></template></ul></div>
+              <div class="real-contacts"><a :href="'tel:' + s.phone.replace(/[^+0-9]/g, '')" x-text="s.phone"></a><template x-if="s.email"><a :href="'mailto:' + s.email" x-text="s.email"></a></template><a :href="realSource(s, s.contact_source_id).url" target="_blank" rel="noopener noreferrer">Источник контактов ↗</a></div>
+              <div class="real-actions"><button class="btn acc sm" @click="prepareRealDraft(s)" :disabled="realDraftLoading">Подготовить запрос</button><small x-text="'Страницы проверены ' + fmtDate(realCase.checked_at)"></small></div>
+            </article>
+          </template>
         </div>
-        <ul class="events" x-show="openEvents[r.id]">
-          <template x-for="e in r.events" :key="e.at + e.text"><li><time x-text="fmtDateTime(e.at)"></time><span x-text="e.text"></span></li></template>
-        </ul>
+        <section class="real-comparison" aria-labelledby="real-cmp-title">
+          <h2 id="real-cmp-title">Сравнение опубликованных условий</h2>
+          <p>Выберите от 2 до 3 компаний. Розничная цена не считается оптовым КП; неподтверждённые данные не получают оценку.</p>
+          <p x-show="realCompared.length < 2" role="status">Отметьте ещё компанию для сравнения.</p>
+          <div class="real-table-wrap" tabindex="0" role="region" aria-labelledby="real-cmp-title" x-show="realCompared.length >= 2">
+            <table class="t real-table"><caption class="sr-only">Данные из сайтов выбранных компаний на дату проверки</caption>
+              <thead><tr><th scope="col">Параметр</th><template x-for="s in realCompared" :key="s.id"><th scope="col" x-text="s.name"></th></template></tr></thead>
+              <tbody><template x-for="key in ['legal_name', 'inn', 'legal_status', 'registration', 'finance', 'product', 'location', 'delivery', 'price', 'min_order', 'availability', 'documents', 'deferral', 'product_history']" :key="key"><tr><th scope="row" x-text="realFact(realCase.suppliers[0], key).label"></th><template x-for="s in realCompared" :key="s.id"><td><span x-text="realFact(s, key).value || realFact(s, key).missing_reason || 'Уточнить в КП'"></span><span class="real-source-links"><template x-for="id in realFact(s, key).source_ids" :key="id"><a :href="realSource(s, id).url" target="_blank" rel="noopener noreferrer" x-text="realSource(s, id).title + ' · ' + fmtDate(realSource(s, id).checked_at) + ' ↗'"></a></template></span></td></template></tr></template></tbody>
+            </table>
+          </div>
+        </section>
+        <template x-if="realDraft">
+          <section class="real-draft" id="real-draft" tabindex="-1" aria-labelledby="real-draft-title">
+            <div class="real-supplier-head"><div><h2 id="real-draft-title" x-text="'Запрос для ' + realDraft.supplier.name"></h2><p>Черновик с вопросами по найденным пробелам. Проверьте данные компании и адрес перед отправкой.</p></div><button class="icon-btn" @click="realDraft = null" aria-label="Закрыть черновик">×</button></div>
+            <label class="field">Тема<input x-model="realDraft.subject" maxlength="200"></label>
+            <label class="field">Текст запроса<textarea x-model="realDraft.body" rows="16"></textarea></label>
+            <div class="real-actions"><button class="btn acc" @click="copyRealDraft()">Скопировать запрос</button><a class="btn ghost" x-show="realMailLink" :href="realMailLink">Открыть почту</a><span class="mut">Отправку выполните в своей почте или мессенджере.</span></div>
+          </section>
+        </template>
       </div>
+    </template>
+  </section>
+
+  <!-- ========== МОИ ПОДБОРКИ ========== -->
+  <section x-show="view === 'collections'" class="collections-page" aria-labelledby="collections-title" :aria-busy="collectionsLoading">
+    <div class="page-head"><div class="grow"><h1 id="collections-title">Мои подборки</h1>
+      <p>Ваши поиски и выбранные компании. Откройте подборку, сравните поставщиков или внесите полученные предложения.</p></div>
+      <button class="btn" @click="reset()">Найти поставщиков</button></div>
+    <p class="mut collections-intro">Подборка сохраняется при первом выборе компании. Копирование письма не означает отправку: отметьте её после отправки.</p>
+    <div class="notice" role="alert" x-show="collectionsError"><p x-text="collectionsError"></p><button class="btn ghost" @click="loadCollections().catch(e => toast(e.message))">Повторить загрузку</button></div>
+    <p role="status" x-show="collectionsLoading && !collections.length">Загружаем подборки…</p>
+    <div class="notice empty" x-show="!collectionsLoading && !collections.length && !collectionsError"><h2>Пока нет сохранённых подборок</h2><p>Найдите поставщиков и отметьте подходящие компании. Здесь появится ваш поиск с критериями.</p><button class="btn acc" @click="reset()">Начать поиск</button></div>
+    <template x-for="c in collections" :key="c.id">
+      <article class="collection">
+        <button class="collection-summary" :aria-expanded="openCollectionId === c.id" :aria-controls="'collection-body-' + c.id" @click="toggleCollection(c)">
+          <span class="collection-summary-main"><span class="collection-source" x-text="c.source === 'real' ? 'Реальные компании' : 'Демо-подборка'"></span><span class="collection-title" x-text="c.title"></span><span class="collection-subtitle" x-text="c.city + (c.search.criteria.volume_kg_month ? ' · ' + money(c.search.criteria.volume_kg_month) + ' кг/мес' : '') + ' · ' + fmtDate(c.created_at)"></span></span>
+          <span class="collection-counts"><span x-text="'Выбрано: ' + c.selected_count"></span><span x-text="'Отправлено: ' + c.sent_count"></span><span x-text="'Ответов: ' + c.received_count"></span></span>
+          <span class="collection-chevron" aria-hidden="true" x-text="openCollectionId === c.id ? '−' : '+'"></span>
+        </button>
+        <div class="collection-body" :id="'collection-body-' + c.id" x-show="openCollectionId === c.id">
+          <div class="collection-criteria"><span class="mut">Критерии поиска:</span><template x-for="label in collectionLabels(c)" :key="label"><span class="chip" x-text="label"></span></template></div>
+          <p class="collection-original" x-show="c.search.criteria.raw" x-text="c.search.criteria.raw"></p>
+          <p class="collection-help" x-show="c.items.some(i => i.migrated)">Сюда перенесены прежние запросы с ценами и заметками. Каталожные условия восстановлены на момент переноса.</p>
+          <p class="collection-help" x-show="!c.quote_comparable">В поиске не был указан конкретный товар. Компании можно сравнить по условиям; для сравнения цен предложений создайте подборку на один товар.</p>
+          <div class="collection-tools">
+            <div><b>Что сравниваем?</b><p>Поставщиков — по сохранённым данным каталога. Предложения — по ценам и условиям из ответов.</p></div>
+            <div class="collection-tool-buttons"><button class="btn ghost sm" :disabled="checkedMembers(c).length < 2" @click="compareCollection(c, 'suppliers')">Сравнить поставщиков</button><button class="btn acc sm" :disabled="!c.quote_comparable || offerMembers(c).length < 2" @click="compareCollection(c, 'offers')" :title="offerMembers(c).length < 2 ? 'Отметьте минимум две компании с полученной ценой' : ''">Сравнить предложения <span x-text="'(' + offerMembers(c).length + ')'"></span></button></div>
+          </div>
+          <p class="collection-help">Отметьте 2–4 компании для сравнения. Для предложений учитываются только отмеченные компании с ответом и ценой.</p>
+          <p class="notice" x-show="!c.items.length">В этой подборке пока нет выбранных компаний. Можно повторить поиск и выбрать поставщиков заново.</p>
+          <div class="collection-members">
+            <template x-for="item in c.items" :key="item.id">
+              <div class="collection-member">
+                <div class="member-main">
+                  <label class="member-select"><input type="checkbox" :checked="(collectionChecked[c.id] || []).includes(item.id)" @change="toggleMember(c, item, $event)"><span x-text="item.supplier.name"></span></label>
+                  <span class="member-status" :class="item.status" x-text="memberStatus(item.status)"></span>
+                </div>
+                <div class="member-prices"><div><span class="mut">Цена в каталоге</span><b x-text="memberFact(item, 'price')"></b></div><div><span class="mut">Цена из ответа</span><b x-text="item.price_rub != null ? quoteMoney(item.price_rub) + ' ₽/' + (item.supplier.unit || 'ед.') : item.status === 'received' ? 'В ответе цена не указана' : 'Ответ пока не внесён'"></b></div></div>
+                <p class="member-reply" x-show="item.terms"><span class="mut">Условия ответа: </span><span x-text="item.terms"></span></p>
+                <p class="member-reply" x-show="item.note"><span class="mut">Заметка: </span><span x-text="item.note"></span></p>
+                <div class="member-actions"><button class="btn ghost sm" @click="draftForMember(c, item)">Подготовить запрос</button><button class="btn ghost sm" x-show="item.status === 'selected'" @click="markSent(c, item)">Отметить отправку</button><button class="btn sm" @click="editReply(c, item)" x-text="item.status === 'received' ? 'Изменить ответ' : 'Внести ответ'"></button></div>
+                <template x-if="replyEditor?.collectionId === c.id && replyEditor?.itemId === item.id">
+                  <form class="member-editor" @submit.prevent="saveReply(c, item)">
+                    <h3>Ответ поставщика</h3><p class="mut">Внесите фактические условия из письма или сообщения. Каталожная цена останется отдельно.</p>
+                    <label class="field"><span x-text="'Цена из ответа, ₽/' + (item.supplier.unit || 'единицу товара') + ' (если указана)'"></span><input type="number" min="0" max="1000000000000" step="any" x-model="replyEditor.price" inputmode="decimal"></label>
+                    <label class="field">Условия из ответа<textarea x-model="replyEditor.terms" rows="3" maxlength="2000" placeholder="Например: НДС включён, партия от 50 кг, доставка 1000 ₽, отсрочка 14 дней"></textarea></label>
+                    <label class="field">Ваша заметка<input x-model="replyEditor.note" maxlength="2000" placeholder="Например: запросить образец"></label>
+                    <div class="member-actions"><button class="btn acc sm" :disabled="replyEditor.busy">Сохранить ответ</button><button class="btn ghost sm" type="button" @click="replyEditor.itemId = null">Отмена</button></div>
+                  </form>
+                </template>
+              </div>
+            </template>
+          </div>
+          <button class="btn ghost sm collection-repeat" @click="repeatCollection(c)" x-text="c.source === 'real' ? 'Открыть реальный пример' : 'Повторить этот поиск'"></button>
+        </div>
+      </article>
     </template>
   </section>
 
@@ -315,7 +390,7 @@
       <div class="step"><div class="n">01</div><h3>Запрос словами</h3><p>Фраза раскладывается на товар, город, объём, цену и условия. Обязательные условия отсекают, желательные — только влияют на балл. Предложения сервиса — пунктиром, без вашего клика не применяются.</p></div>
       <div class="step"><div class="n">02</div><h3>Проверка и балл</h3><p>Для каждого кандидата: соответствие запросу, надёжность юрлица и документов, цена относительно медианы рынка, логистика до вашей кухни.</p></div>
       <div class="step"><div class="n">03</div><h3>Сравнение</h3><p>2–4 поставщика в таблице: лучшее значение в строке отмечено, внизу — вывод простыми словами.</p></div>
-      <div class="step"><div class="n">04</div><h3>Запрос КП</h3><p>Письмо собирается из запроса и профиля. Каждому поставщику — в его канал. Ответы и цены — во вкладке «Запросы КП».</p></div>
+      <div class="step"><div class="n">04</div><h3>Запрос КП</h3><p>Письмо собирается из запроса и профиля. Каждому поставщику — в его канал. Ответы и цены — в «Моих подборках».</p></div>
     </div>
 
     <h2>Балл 0–100</h2>
@@ -353,10 +428,12 @@
 <div class="selbar" x-show="selected.length && view === 'search'">
   <span x-text="'Выбрано ' + selected.length + ' из 4'"></span>
   <span class="names">
-    <template x-for="s in selected" :key="s.id"><span class="chip"><span x-text="s.name"></span><button title="Убрать" @click="selected = selected.filter(x => x.id !== s.id)">×</button></span></template>
+    <template x-for="s in selected" :key="s.id"><span class="chip"><span x-text="s.name"></span><button title="Убрать" @click="toggleSelect({ supplier: s })">×</button></span></template>
   </span>
   <button class="btn ghost sm" :disabled="selected.length < 2" @click="openCompare()" :title="selected.length < 2 ? 'Выберите минимум двух' : ''">Сравнить</button>
-  <button class="btn acc sm" @click="openKP()">Запросить КП</button>
+  <button class="btn acc sm" @click="showCurrentCollection()">Моя подборка</button>
+  <button class="btn ghost sm" @click="openKP()">Подготовить запрос</button>
+  <span class="selection-save" role="status" x-text="pendingSaves ? 'Сохраняем…' : saveError || 'Выбранные компании сохранены'"></span>
   <span class="warn-text" x-show="noContactSelected.length" x-text="'⚠ У ' + noContactSelected.map(s => s.name).join(', ') + ' нет e-mail и мессенджеров — только копирование текста и звонок'"></span>
 </div>
 
@@ -488,7 +565,7 @@
 <dialog x-ref="compareDlg" @close="compare = null" aria-labelledby="cmp-title">
   <template x-if="compare">
     <div>
-      <div class="dlg-head"><div class="grow"><h2 id="cmp-title">Сравнение поставщиков</h2><div class="mut">★ — лучшее значение в строке</div></div>
+      <div class="dlg-head"><div class="grow"><h2 id="cmp-title" x-text="compare.quoted ? 'Сравнение полученных КП' : 'Сравнение поставщиков'"></h2><div class="mut" x-text="compare.quoted ? 'Цены из ответов, в рублях за единицу товара. ★ — лучшее значение' : '★ — лучшее значение в строке'"></div></div>
         <button class="icon-btn" @click="$refs.compareDlg.close()" aria-label="Закрыть">×</button></div>
       <div class="dlg-body">
         <div style="overflow-x:auto">
@@ -530,8 +607,8 @@
                 </select>
               </label>
               <div>
-                <template x-if="!row.sent"><button class="btn acc sm" @click="sendRow(row)" x-text="row.channel === 'copy' ? 'Скопировать' : 'Отправить'"></button></template>
-                <template x-if="row.sent"><span class="sent-mark" x-text="'✓ ждём ответ до ' + fmtDate(row.sent.reply_due)"></span></template>
+                <template x-if="!row.sent"><button class="btn acc sm" @click="sendRow(row)" :disabled="row.busy" x-text="row.channel === 'copy' ? 'Скопировать' : 'Открыть канал'"></button></template>
+                <template x-if="row.sent"><span class="sent-mark" x-text="'✓ подготовлено, подтвердите отправку в «Моих подборках»'"></span></template>
               </div>
             </div>
           </template>
@@ -542,7 +619,7 @@
       <div class="dlg-foot">
         <button class="btn" @click="finishKP()" x-text="kpSentCount ? 'Готово' : 'Закрыть'"></button>
         <button class="btn ghost" @click="copyText()">Скопировать текст</button>
-        <span class="mut" style="align-self:center;font-size:12px">В прототипе «Отправить» открывает почту или мессенджер с готовым текстом и сохраняет запрос во вкладке «Запросы КП».</span>
+        <span class="mut" style="align-self:center;font-size:12px">Откройте канал или скопируйте текст. После фактической отправки измените статус на «Отправлено» в «Моих подборках».</span>
       </div>
     </div>
   </template>
@@ -578,6 +655,26 @@
   <div class="dlg-head"><div class="grow"><h2 id="reset-title">Сбросить демо-данные?</h2></div></div>
   <div class="dlg-body"><p style="margin:0">Ваши заметки, запросы КП и изменения профиля удалятся, база заполнится заново.</p></div>
   <div class="dlg-foot"><button class="btn acc" @click="resetDemo()">Сбросить</button><button class="btn ghost" @click="$refs.resetDlg.close()">Отмена</button></div>
+</dialog>
+
+<!-- Сравнение внутри одной подборки -->
+<dialog x-ref="collectionCompareDlg" aria-labelledby="collection-compare-title">
+  <template x-if="collectionComparison"><div>
+    <div class="dlg-head"><div class="grow"><h2 id="collection-compare-title" x-text="(collectionComparison.kind === 'offers' ? 'Полученные предложения' : 'Поставщики') + ' · ' + collectionComparison.title"></h2><p class="mut" x-text="collectionComparison.kind === 'offers' ? 'Цены и условия, внесённые из ответов поставщиков' : 'Сохранённые данные каталога, а не персональные КП'"></p></div><button class="icon-btn" @click="$refs.collectionCompareDlg.close()" aria-label="Закрыть">×</button></div>
+    <div class="dlg-body"><div class="collection-table-wrap" role="region" aria-labelledby="collection-compare-title" tabindex="0"><table class="t collection-compare-table"><thead><tr><th scope="col">Параметр</th><template x-for="i in collectionComparison.items" :key="i.id"><th scope="col" x-text="i.supplier.name"></th></template></tr></thead><tbody><template x-for="row in collectionComparisonRows" :key="row.label"><tr><th scope="row" x-text="row.label"></th><template x-for="(value, idx) in row.values" :key="idx"><td :class="row.price && collectionComparison.items[idx].price_rub === collectionComparison.best_price ? 'best' : ''" x-text="value"></td></template></tr></template></tbody></table></div>
+    <p class="conclusion" x-text="collectionComparison.conclusion"></p>
+    <div x-show="collectionComparison.source === 'real'"><h3>Источники сохранённых условий</h3><template x-for="i in collectionComparison.items" :key="i.id"><div class="collection-sources"><b x-text="i.supplier.name"></b><template x-for="source in i.supplier.sources" :key="source.id"><a :href="source.url" target="_blank" rel="noopener noreferrer" x-text="source.title + ' · ' + fmtDate(source.checked_at) + ' ↗'"></a></template></div></template></div></div>
+    <div class="dlg-foot"><button class="btn ghost" @click="$refs.collectionCompareDlg.close()">Вернуться в подборку</button></div>
+  </div></template>
+</dialog>
+
+<!-- Черновик запроса из сохранённой подборки -->
+<dialog x-ref="collectionDraftDlg" @close="collectionDraft = null" aria-labelledby="collection-draft-title">
+  <template x-if="collectionDraft"><div>
+    <div class="dlg-head"><div class="grow"><h2 id="collection-draft-title" x-text="'Запрос для ' + collectionDraft.supplier.name"></h2><p class="mut">Проверьте текст, откройте почту или скопируйте запрос. После отправки отметьте её здесь.</p></div><button class="icon-btn" @click="$refs.collectionDraftDlg.close()" aria-label="Закрыть">×</button></div>
+    <div class="dlg-body"><label class="field">Тема<input x-model="collectionDraft.subject" maxlength="200"></label><label class="field">Текст письма<textarea x-model="collectionDraft.body" rows="14"></textarea></label><div class="member-actions"><button class="btn ghost" @click="copyCollectionDraft()">Скопировать</button><a class="btn ghost" x-show="draftContactLink('email')" :href="draftContactLink('email')">Открыть почту</a><a class="btn ghost" x-show="draftContactLink('whatsapp')" :href="draftContactLink('whatsapp')" target="_blank" rel="noopener noreferrer">Открыть WhatsApp</a><a x-show="collectionDraft.supplier.phone" :href="'tel:' + collectionDraft.supplier.phone?.replace(/[^+0-9]/g, '')" x-text="collectionDraft.supplier.phone"></a></div></div>
+    <div class="dlg-foot"><button class="btn acc" x-show="collectionDraft.status === 'selected'" @click="confirmDraftSent()">Я отправил запрос</button><span class="mut" x-show="collectionDraft.status !== 'selected'" x-text="memberStatus(collectionDraft.status)"></span><button class="btn ghost" @click="$refs.collectionDraftDlg.close()">Закрыть</button></div>
+  </div></template>
 </dialog>
 
 <div class="toast" popover="manual" x-ref="toast" role="status" x-text="toastText"></div>

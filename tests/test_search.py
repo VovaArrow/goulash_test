@@ -84,7 +84,7 @@ def test_no_price_not_hidden_by_price_cap_and_not_in_median(conn):
     assert "ООО «СырПром»" in names and "Уральская сыроварня" not in names
     assert any(h.reason == "Дороже 470 ₽" for h in r.hidden)
     priced = [x.offer.price_rub for x in r.results if x.offer and x.offer.price_rub is not None]
-    assert r.median_price_rub == statistics.median(priced)
+    assert r.median_price_rub == (statistics.median(priced) if len(priced) >= 2 else None)
 
 
 def test_sort_by_price_and_distance(conn):
@@ -108,3 +108,22 @@ def test_mode_changes_order(conn):
     a = [x.supplier.id for x in _search(conn, c, mode="price").results]
     b = [x.supplier.id for x in _search(conn, c, mode="reliability").results]
     assert sorted(a) == sorted(b) and a != b
+
+
+def test_median_only_within_same_product(conn):
+    r = _search(conn, PARSER.parse("упаковка Екб", default_city="ekb"))
+    assert r.median_price_rub is None                      # товар не задан — общей медианы нет
+    by_key = {}
+    for x in r.results:
+        if x.offer and x.offer.price_rub is not None:
+            by_key.setdefault(x.offer.key, []).append(x.offer.price_rub)
+    for x in r.results:
+        if x.offer and len(by_key.get(x.offer.key, [])) < 2:
+            assert x.parts.price == 50, x.supplier.name
+    assert r.medians and all(k in by_key for k in r.medians)
+
+
+def test_required_deferral_needs_full_term(conn):
+    c = PARSER.parse("моцарелла Екб, обязательно отсрочка 30 дней")
+    r = _search(conn, c)
+    assert all((x.supplier.deferral_days or 0) >= 30 for x in r.results)

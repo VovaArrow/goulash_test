@@ -5,3 +5,9 @@ __pycache__/
 .superpowers/
 .DS_Store
 .pytest_cache/
+.ruff_cache/
+.env
+.env.*
+!.env.example
+visual/
+docs/superpowers/

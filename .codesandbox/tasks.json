@@ -1,0 +1,13 @@
+{
+  "setupTasks": [
+    "python3 -m venv .venv",
+    ".venv/bin/python -m pip install -r requirements.txt"
+  ],
+  "tasks": {
+    "start": {
+      "name": "Goulash demo",
+      "command": ".venv/bin/python scripts/run_codesandbox.py",
+      "runAtStart": true
+    }
+  }
+}

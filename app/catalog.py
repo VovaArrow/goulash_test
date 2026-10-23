@@ -128,6 +128,7 @@ CITIES: dict[str, CitySpec] = {c.key: c for c in [
 ]}
 
 CONDITIONS: dict[str, ConditionSpec] = {
+    "no_prepay": ConditionSpec("Без предоплаты", ("без предоплат", "без аванс")),
     "declarations": ConditionSpec("Декларации / сертификаты", ("деклар", "сертифик")),
     "mercury": ConditionSpec("Меркурий (ВСД)", ("меркур", "всд", "ветсерт")),
     "haccp": ConditionSpec("ХАССП", ("хассп", "haccp")),

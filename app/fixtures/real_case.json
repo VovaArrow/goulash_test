@@ -1,0 +1,938 @@
+{
+  "id": "mozzarella-ekb",
+  "title": "Моцарелла для пиццы в Екатеринбурге",
+  "query": "Сыр моцарелла без ЗМЖ, 200 кг в месяц, доставка в Екатеринбург с холодовой цепью; нужны декларации, желательно 14 дней отсрочки.",
+  "checked_at": "2026-10-22",
+  "method": "Ручной срез сайтов поставщиков и открытых карточек Т-Банка и Saby от 22.10.2026. Реквизиты сопоставлены с документами и контактами сайтов. Это частичная проверка, не поиск в реальном времени: арбитраж, ФССП, банкротство и действующие декларации напрямую в реестрах не сверены. Статус компании не подтверждает готовность поставки.",
+  "conclusion": "Начать с Продсервиса: найдены подходящий товар, местный склад и температурная логистика; опубликованы общие условия по документам и отсрочке. Для Mozaretti сначала уточнить документы на текущую партию и результат мероприятий 2024 года; у ГОСТ согласовать перевозку из Тулы. Самоваръ оставить в резерве из-за отсутствия товара; Гурман пока исключить по географии. Победителя по цене нет: сопоставимых оптовых КП ещё нет.",
+  "suppliers": [
+    {
+      "id": "prodservice",
+      "name": "Продсервис",
+      "kind": "Поставщик HoReCa",
+      "decision": "shortlist",
+      "decision_label": "Написать первым",
+      "reason": "На сайте есть моцарелла для пиццы, склад в Екатеринбурге и доставка с температурным режимом. Запросить цену и доступность на 200 кг/мес.",
+      "caveats": [
+        "У Profi Cheese есть сыр и вариант с ЗМЖ. В запросе нужно явно выбрать сыр без ЗМЖ.",
+        "Отсрочка и документы заявлены в общих условиях. Декларацию на конкретный сыр, цену и 14 дней отсрочки подтвердить в КП."
+      ],
+      "phone": "8-800-222-79-70",
+      "email": "info@prodservice.ru",
+      "contact_source_id": "ps-offer",
+      "sources": [
+        {
+          "id": "ps-product",
+          "title": "Моцарелла Profi Cheese",
+          "url": "https://prodservice.ru/special/233.html",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "ps-contacts",
+          "title": "Адрес и контакты",
+          "url": "https://prodservice.ru/about/contact/",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "ps-delivery",
+          "title": "Логистика",
+          "url": "https://prodservice.ru/transport/",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "ps-legal",
+          "title": "Т-Банк: реквизиты и отчётность",
+          "url": "https://www.tbank.ru/business/contractor/legal/1076670012297/",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "ps-offer",
+          "title": "Оферта: реквизиты продавца",
+          "url": "https://prodservice.shop/info/contract.php",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "ps-about",
+          "title": "Условия сотрудничества",
+          "url": "https://prodservice.ru/about/",
+          "checked_at": "2026-10-22"
+        }
+      ],
+      "facts": [
+        {
+          "key": "product",
+          "label": "Товар",
+          "value": "Profi Cheese для пиццы; опубликованы сыр и молокосодержащий вариант.",
+          "source_ids": [
+            "ps-product"
+          ]
+        },
+        {
+          "key": "location",
+          "label": "Склад / адрес",
+          "value": "Екатеринбург, ул. Краснодарская, 11.",
+          "source_ids": [
+            "ps-contacts"
+          ]
+        },
+        {
+          "key": "delivery",
+          "label": "Доставка",
+          "value": "Заявлена доставка по Уралу транспортом с температурным режимом; тариф и график до кухни уточнить.",
+          "source_ids": [
+            "ps-delivery"
+          ]
+        },
+        {
+          "key": "price",
+          "label": "Цена",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "min_order",
+          "label": "Минимальная партия",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "availability",
+          "label": "Наличие на 200 кг/мес",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "documents",
+          "label": "Документы",
+          "value": "Компания заявляет комплект документов, сертификаты и работу с «Меркурием». Действующую декларацию именно на выбранную моцареллу ещё нужно получить.",
+          "source_ids": [
+            "ps-about"
+          ]
+        },
+        {
+          "key": "deferral",
+          "label": "Отсрочка",
+          "value": "Отсрочка заявлена на сайте; срок 14 дней и доступность новому клиенту не подтверждены.",
+          "source_ids": [
+            "ps-about"
+          ]
+        }
+      ],
+      "company_facts": [
+        {
+          "key": "legal_name",
+          "label": "Юрлицо / ИП",
+          "value": "ООО «ТД «Продсервис»",
+          "source_ids": [
+            "ps-offer",
+            "ps-legal"
+          ]
+        },
+        {
+          "key": "inn",
+          "label": "ИНН",
+          "value": "6670170834",
+          "source_ids": [
+            "ps-legal"
+          ]
+        },
+        {
+          "key": "ogrn",
+          "label": "ОГРН / ОГРНИП",
+          "value": "1076670012297",
+          "source_ids": [
+            "ps-legal"
+          ]
+        },
+        {
+          "key": "registration",
+          "label": "Дата регистрации",
+          "value": "18.04.2007",
+          "source_ids": [
+            "ps-legal"
+          ]
+        },
+        {
+          "key": "legal_status",
+          "label": "Статус в источнике",
+          "value": "Действующая организация по карточке Т-Банка.",
+          "source_ids": [
+            "ps-legal"
+          ]
+        },
+        {
+          "key": "activity",
+          "label": "Основная деятельность",
+          "value": "46.33: оптовая торговля молочными продуктами, яйцами, пищевыми маслами и жирами.",
+          "source_ids": [
+            "ps-legal"
+          ]
+        },
+        {
+          "key": "legal_address",
+          "label": "Юридический адрес",
+          "value": "Екатеринбург, ул. Краснодарская, 11; совпадает с адресом на сайте.",
+          "source_ids": [
+            "ps-offer",
+            "ps-legal"
+          ]
+        },
+        {
+          "key": "management",
+          "label": "Руководитель",
+          "value": "Шекалян Дмитрий Николаевич.",
+          "source_ids": [
+            "ps-legal"
+          ]
+        },
+        {
+          "key": "finance",
+          "label": "Отчётность за 2025 год",
+          "value": "Выручка 5,74 млрд ₽, прибыль 172,37 млн ₽; округлённые значения из карточки Т-Банка.",
+          "source_ids": [
+            "ps-legal"
+          ]
+        },
+        {
+          "key": "identity",
+          "label": "Связь с сайтом",
+          "value": "В оферте интернет-магазина указаны тот же ИНН, сайт prodservice.ru и общий телефон.",
+          "source_ids": [
+            "ps-offer"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mozaretti",
+      "name": "Mozaretti",
+      "kind": "Производитель",
+      "decision": "clarify",
+      "decision_label": "Уточнить поставку",
+      "reason": "Производитель связан с ООО «ВариантОдин». Ассортимент подходит, но перед отбором нужно уточнить доставку на Урал, документы на текущую продукцию и выполнение плана по исторической партии 2024 года.",
+      "caveats": [
+        "Производство находится в Калужской области; локальный склад в Екатеринбурге не подтверждён.",
+        "Общая фраза о регионах не подтверждает срок и стоимость доставки до нашей кухни.",
+        "По отчётности Saby за 2025 год указан чистый убыток. Условия оплаты оценивать после уточнения текущих показателей.",
+        "На сайте есть план отзыва конкретной партии 2024 года. Запросить результат мероприятий и документы на текущую партию; не переносить вывод на всю нынешнюю продукцию."
+      ],
+      "phone": "+7 (800) 511-01-77",
+      "email": "office@mozaretti.ru",
+      "contact_source_id": "mz-contacts",
+      "sources": [
+        {
+          "id": "mz-product",
+          "title": "Производитель и ассортимент",
+          "url": "https://mozaretti.ru/",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "mz-contacts",
+          "title": "Контакты",
+          "url": "https://mozaretti.ru/kontakty/",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "mz-policy",
+          "title": "Сайт: оператор ООО «ВариантОдин»",
+          "url": "https://mozaretti.ru/politika-konfidentsialnosti/",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "mz-program",
+          "title": "План мероприятий по партии 2024 года (PDF)",
+          "url": "https://mozaretti.ru/upload/iblock/7c2/lc3c28afhcnvln83m7py29g18arx83pp.pdf",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "mz-legal",
+          "title": "Saby: компания и отчётность",
+          "url": "https://saby.ru/profile/2636091455-771501001",
+          "checked_at": "2026-10-22"
+        }
+      ],
+      "facts": [
+        {
+          "key": "product",
+          "label": "Товар",
+          "value": "Есть натуральная моцарелла для пиццы без ЗМЖ; отдельно представлены молокосодержащие продукты.",
+          "source_ids": [
+            "mz-product"
+          ]
+        },
+        {
+          "key": "location",
+          "label": "Склад / адрес",
+          "value": "Производство: Калужская область, Бабынино, ул. Моторная, 10.",
+          "source_ids": [
+            "mz-contacts"
+          ]
+        },
+        {
+          "key": "delivery",
+          "label": "Доставка",
+          "value": "Заявлена доставка во все регионы; маршрут в Екатеринбург требует согласования.",
+          "source_ids": [
+            "mz-product"
+          ]
+        },
+        {
+          "key": "price",
+          "label": "Цена",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "min_order",
+          "label": "Минимальная партия",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "availability",
+          "label": "Наличие на 200 кг/мес",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "documents",
+          "label": "Документы",
+          "value": "На сайте опубликован план мероприятий по партии 2024 года. Он не заменяет действующую декларацию на текущую продукцию; её нужно запросить.",
+          "source_ids": [
+            "mz-program"
+          ]
+        },
+        {
+          "key": "deferral",
+          "label": "Отсрочка",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "product_history",
+          "label": "История качества",
+          "value": "В опубликованном плане от 25.10.2024 описаны несоответствие состава и отзыв партии моцареллы 45% от 10.06.2024. Это историческая партия; исполнение плана и качество текущей продукции не подтверждены.",
+          "source_ids": [
+            "mz-program"
+          ]
+        }
+      ],
+      "company_facts": [
+        {
+          "key": "legal_name",
+          "label": "Юрлицо / ИП",
+          "value": "ООО «ВариантОдин»",
+          "source_ids": [
+            "mz-policy",
+            "mz-program"
+          ]
+        },
+        {
+          "key": "inn",
+          "label": "ИНН",
+          "value": "2636091455",
+          "source_ids": [
+            "mz-legal"
+          ]
+        },
+        {
+          "key": "ogrn",
+          "label": "ОГРН / ОГРНИП",
+          "value": "1102635010873",
+          "source_ids": [
+            "mz-legal"
+          ]
+        },
+        {
+          "key": "registration",
+          "label": "Дата регистрации",
+          "value": "28.09.2010",
+          "source_ids": [
+            "mz-legal"
+          ]
+        },
+        {
+          "key": "legal_status",
+          "label": "Статус в источнике",
+          "value": "Действует по карточке Saby на 22.10.2026.",
+          "source_ids": [
+            "mz-legal"
+          ]
+        },
+        {
+          "key": "activity",
+          "label": "Основная деятельность",
+          "value": "10.51.3: производство сыра и сырных продуктов.",
+          "source_ids": [
+            "mz-legal"
+          ]
+        },
+        {
+          "key": "legal_address",
+          "label": "Юридический адрес",
+          "value": "Saby указывает Москву, ул. Новодмитровская, 5А, стр. 2, КПП 771501001. В PDF 2024 года указан Ставрополь, ул. Заводская, 8, пом. 35, КПП 263601001. Перед договором нужны актуальные реквизиты.",
+          "source_ids": [
+            "mz-legal",
+            "mz-program"
+          ]
+        },
+        {
+          "key": "finance",
+          "label": "Отчётность за 2025 год",
+          "value": "По Saby: выручка 357,9 млн ₽, чистый убыток 18,4 млн ₽.",
+          "source_ids": [
+            "mz-legal"
+          ]
+        },
+        {
+          "key": "identity",
+          "label": "Связь с сайтом",
+          "value": "В документе на mozaretti.ru указаны ИНН, ОГРН и производство в Бабынино; в политике сайта названа та же компания.",
+          "source_ids": [
+            "mz-program",
+            "mz-policy"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gostpp",
+      "name": "ГОСТ / ИП Ховренок",
+      "kind": "Оптовый поставщик",
+      "decision": "clarify",
+      "decision_label": "Уточнить логистику",
+      "reason": "В каталоге есть моцарелла для пиццы по 1 кг. Екатеринбург обслуживается через Тулу, поэтому до запроса цены нужно согласовать перевозку охлаждённого товара.",
+      "caveats": [
+        "Региональная страница не означает наличие местного склада.",
+        "Обычная отправка транспортной компанией сама по себе не подтверждает холодовую цепь."
+      ],
+      "phone": "8 (800) 707-94-42",
+      "email": "ekb@gostpp.ru",
+      "contact_source_id": "gs-contacts",
+      "sources": [
+        {
+          "id": "gs-product",
+          "title": "Моцарелла в каталоге",
+          "url": "https://ekb.gostpp.ru/katalog/syry/mocarella/",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "gs-contacts",
+          "title": "Контакты и обслуживающий склад",
+          "url": "https://ekb.gostpp.ru/kontakty.html",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "gs-legal",
+          "title": "Saby: сведения о предпринимателе",
+          "url": "https://saby.ru/profile/710511011093",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "gs-consent",
+          "title": "Сайт: ИНН и ОГРНИП оператора",
+          "url": "https://krasnodar.gostpp.ru/soglasie-na-obrabotku-personalnykh-dannykh.html",
+          "checked_at": "2026-10-22"
+        }
+      ],
+      "facts": [
+        {
+          "key": "product",
+          "label": "Товар",
+          "value": "Моцарелла Пицца 1000 г, Туровский молочный комбинат.",
+          "source_ids": [
+            "gs-product"
+          ]
+        },
+        {
+          "key": "location",
+          "label": "Склад / адрес",
+          "value": "Екатеринбург обслуживается через Тулу: Одоевское шоссе, 130, склад №7.",
+          "source_ids": [
+            "gs-contacts"
+          ]
+        },
+        {
+          "key": "delivery",
+          "label": "Доставка",
+          "value": "В каталоге указана возможность отправки по России через транспортные компании; холодовую цепь уточнить.",
+          "source_ids": [
+            "gs-product"
+          ]
+        },
+        {
+          "key": "price",
+          "label": "Цена",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "min_order",
+          "label": "Минимальная партия",
+          "value": "В карточке минимум 1 упаковка 1 кг; минимальную сумму оптового заказа уточнить.",
+          "source_ids": [
+            "gs-product"
+          ]
+        },
+        {
+          "key": "availability",
+          "label": "Наличие на 200 кг/мес",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "documents",
+          "label": "Документы",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "deferral",
+          "label": "Отсрочка",
+          "value": null,
+          "source_ids": []
+        }
+      ],
+      "company_facts": [
+        {
+          "key": "legal_name",
+          "label": "Юрлицо / ИП",
+          "value": "ИП Ховренок Дмитрий Александрович",
+          "source_ids": [
+            "gs-contacts",
+            "gs-consent",
+            "gs-legal"
+          ]
+        },
+        {
+          "key": "inn",
+          "label": "ИНН",
+          "value": "710511011093",
+          "source_ids": [
+            "gs-legal"
+          ]
+        },
+        {
+          "key": "ogrn",
+          "label": "ОГРН / ОГРНИП",
+          "value": "312715432600101",
+          "source_ids": [
+            "gs-legal"
+          ]
+        },
+        {
+          "key": "registration",
+          "label": "Дата регистрации",
+          "value": "21.11.2012",
+          "source_ids": [
+            "gs-legal"
+          ]
+        },
+        {
+          "key": "legal_status",
+          "label": "Статус в источнике",
+          "value": "Действует по карточке Saby на 22.10.2026.",
+          "source_ids": [
+            "gs-legal"
+          ]
+        },
+        {
+          "key": "activity",
+          "label": "Основная деятельность",
+          "value": "46.32: оптовая торговля мясом и мясными продуктами.",
+          "source_ids": [
+            "gs-legal"
+          ]
+        },
+        {
+          "key": "legal_region",
+          "label": "Регион регистрации",
+          "value": "Тульская область, Тула; это не местный поставщик Екатеринбурга.",
+          "source_ids": [
+            "gs-legal",
+            "gs-contacts"
+          ]
+        },
+        {
+          "key": "identity",
+          "label": "Связь с сайтом",
+          "value": "ИНН на странице контактов совпадает с карточкой предпринимателя; ОГРНИП опубликован в согласии на сайте.",
+          "source_ids": [
+            "gs-contacts",
+            "gs-consent",
+            "gs-legal"
+          ]
+        },
+        {
+          "key": "finance",
+          "label": "Финансовые показатели",
+          "value": null,
+          "source_ids": [],
+          "missing_reason": "В просмотренной открытой карточке ИП выручка и прибыль не раскрыты. Не считаем их нулевыми."
+        }
+      ]
+    },
+    {
+      "id": "samovar",
+      "name": "Лавка Самоваръ",
+      "kind": "Оптовая и розничная торговля",
+      "decision": "unavailable",
+      "decision_label": "Нет в наличии",
+      "reason": "Локальный продавец с подходящим товаром, но в карточке указано отсутствие. Оставить в резерве и спросить дату следующей поставки.",
+      "caveats": [
+        "937 ₽/кг — опубликованная розничная цена, не предложение на 200 кг и не действующее КП.",
+        "На странице товара доставка бесплатна от 3000 ₽, а в таблице доставки по Екатеринбургу указан порог 4000 ₽. Условия требуют уточнения."
+      ],
+      "phone": "+7 (343) 385-81-22",
+      "email": "ip_moshkin@mail.ru",
+      "contact_source_id": "sm-delivery",
+      "sources": [
+        {
+          "id": "sm-product",
+          "title": "Моцарелла Пицца 40%, 1 кг",
+          "url": "https://samovar-lavka.ru/offer/syr-mocarella-picca-40-1kg-brus-1-8-tm-anton-palych,-turovskiy-mk-bzmzh--9108",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "sm-delivery",
+          "title": "Доставка и контакты",
+          "url": "https://samovar-lavka.ru/delivery",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "sm-terms",
+          "title": "Сайт: владелец и ОГРНИП",
+          "url": "https://samovar-lavka.ru/terms",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "sm-legal",
+          "title": "Т-Банк: сведения о предпринимателе",
+          "url": "https://www.tbank.ru/business/contractor/legal/314667911800082/",
+          "checked_at": "2026-10-22"
+        }
+      ],
+      "facts": [
+        {
+          "key": "product",
+          "label": "Товар",
+          "value": "Моцарелла Пицца 40%, брус 1 кг, Туровский МК, БЗМЖ.",
+          "source_ids": [
+            "sm-product"
+          ]
+        },
+        {
+          "key": "location",
+          "label": "Склад / адрес",
+          "value": "Самовывоз: Екатеринбург, ул. Проезжая, 9а.",
+          "source_ids": [
+            "sm-product"
+          ]
+        },
+        {
+          "key": "delivery",
+          "label": "Доставка",
+          "value": "Собственная доставка в Екатеринбурге; пороги бесплатной доставки на страницах различаются.",
+          "source_ids": [
+            "sm-product",
+            "sm-delivery"
+          ]
+        },
+        {
+          "key": "price",
+          "label": "Цена",
+          "value": "937 ₽/кг, розничная; оптовая цена согласуется отдельно.",
+          "source_ids": [
+            "sm-product"
+          ]
+        },
+        {
+          "key": "min_order",
+          "label": "Минимальная партия",
+          "value": "Товар от 1 кг; на странице указан оптовый заказ от 3000 ₽.",
+          "source_ids": [
+            "sm-product"
+          ]
+        },
+        {
+          "key": "availability",
+          "label": "Наличие на 200 кг/мес",
+          "value": "На странице товара указано отсутствие в наличии.",
+          "source_ids": [
+            "sm-product"
+          ]
+        },
+        {
+          "key": "documents",
+          "label": "Документы",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "deferral",
+          "label": "Отсрочка",
+          "value": null,
+          "source_ids": []
+        }
+      ],
+      "company_facts": [
+        {
+          "key": "legal_name",
+          "label": "Юрлицо / ИП",
+          "value": "ИП Мошкин Илья Владимирович",
+          "source_ids": [
+            "sm-terms",
+            "sm-legal"
+          ]
+        },
+        {
+          "key": "inn",
+          "label": "ИНН",
+          "value": "667472827715",
+          "source_ids": [
+            "sm-legal"
+          ]
+        },
+        {
+          "key": "ogrn",
+          "label": "ОГРН / ОГРНИП",
+          "value": "314667911800082",
+          "source_ids": [
+            "sm-legal"
+          ]
+        },
+        {
+          "key": "registration",
+          "label": "Дата регистрации",
+          "value": "28.04.2014",
+          "source_ids": [
+            "sm-legal"
+          ]
+        },
+        {
+          "key": "legal_status",
+          "label": "Статус в источнике",
+          "value": "Действующий ИП по карточке Т-Банка.",
+          "source_ids": [
+            "sm-legal"
+          ]
+        },
+        {
+          "key": "activity",
+          "label": "Основная деятельность",
+          "value": "46.36.3: оптовая торговля мучными кондитерскими изделиями.",
+          "source_ids": [
+            "sm-legal"
+          ]
+        },
+        {
+          "key": "identity",
+          "label": "Связь с сайтом",
+          "value": "В условиях сайта владелец указан как ИП И. В. Мошкин с ОГРНИП 314667911800082; он совпадает с карточкой Т-Банка.",
+          "source_ids": [
+            "sm-terms",
+            "sm-legal"
+          ]
+        },
+        {
+          "key": "finance",
+          "label": "Финансовые показатели",
+          "value": "В карточке Т-Банка указано отсутствие бухгалтерской отчётности ИП. Выручку и прибыль по этим данным определить нельзя.",
+          "source_ids": [
+            "sm-legal"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gurman",
+      "name": "ТД «Гурман»",
+      "kind": "Поставщик HoReCa",
+      "decision": "outside_region",
+      "decision_label": "Вне подтверждённого региона",
+      "reason": "Ассортимент подходит, но опубликованные условия доставки относятся к Москве и области. Исключён из первичного списка для Екатеринбурга до подтверждения маршрута.",
+      "caveats": [
+        "Наличие моцареллы в каталоге не подтверждает доставку в Екатеринбург.",
+        "Не включаем в первичный запрос на поставку без согласования региональной логистики.",
+        "В поиске встречаются одноимённые компании. Данные здесь относятся только к ИНН 7728383263; реквизиты будущего продавца сверить с договором."
+      ],
+      "phone": "+7 (495) 133-00-60",
+      "email": "office@gurman-llc.ru",
+      "contact_source_id": "gm-contacts",
+      "sources": [
+        {
+          "id": "gm-product",
+          "title": "Моцарелла оптом",
+          "url": "https://gurman-llc.ru/catalog/syry/filter/cheese_type-is-mocarella/apply/",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "gm-delivery",
+          "title": "Доставка и оплата",
+          "url": "https://gurman-llc.ru/payment/",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "gm-contacts",
+          "title": "Контакты",
+          "url": "https://gurman-llc.ru/contacts/",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "gm-legal",
+          "title": "Saby: реквизиты и отчётность",
+          "url": "https://saby.ru/profile/7728383263-772801001",
+          "checked_at": "2026-10-22"
+        },
+        {
+          "id": "gm-identity",
+          "title": "Каталог: сайт, телефон и ИНН",
+          "url": "https://optsbyt.ru/supplier/gurman",
+          "checked_at": "2026-10-22"
+        }
+      ],
+      "facts": [
+        {
+          "key": "product",
+          "label": "Товар",
+          "value": "Каталог моцареллы для пиццерий и ресторанов.",
+          "source_ids": [
+            "gm-product"
+          ]
+        },
+        {
+          "key": "location",
+          "label": "Склад / адрес",
+          "value": "Московская область, Томилино, 23 км Новорязанского шоссе, строение 27/2.",
+          "source_ids": [
+            "gm-contacts"
+          ]
+        },
+        {
+          "key": "delivery",
+          "label": "Доставка",
+          "value": "Опубликованы условия по Москве и Московской области; Екатеринбург не подтверждён.",
+          "source_ids": [
+            "gm-delivery"
+          ]
+        },
+        {
+          "key": "price",
+          "label": "Цена",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "min_order",
+          "label": "Минимальная партия",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "availability",
+          "label": "Наличие на 200 кг/мес",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "documents",
+          "label": "Документы",
+          "value": null,
+          "source_ids": []
+        },
+        {
+          "key": "deferral",
+          "label": "Отсрочка",
+          "value": null,
+          "source_ids": []
+        }
+      ],
+      "company_facts": [
+        {
+          "key": "legal_name",
+          "label": "Юрлицо / ИП",
+          "value": "ООО «ТД «Гурман»",
+          "source_ids": [
+            "gm-contacts",
+            "gm-identity",
+            "gm-legal"
+          ]
+        },
+        {
+          "key": "inn",
+          "label": "ИНН",
+          "value": "7728383263",
+          "source_ids": [
+            "gm-legal"
+          ]
+        },
+        {
+          "key": "ogrn",
+          "label": "ОГРН / ОГРНИП",
+          "value": "5177746097645",
+          "source_ids": [
+            "gm-legal"
+          ]
+        },
+        {
+          "key": "registration",
+          "label": "Дата регистрации",
+          "value": "19.10.2017",
+          "source_ids": [
+            "gm-legal"
+          ]
+        },
+        {
+          "key": "legal_status",
+          "label": "Статус в источнике",
+          "value": "Действует по карточке Saby на 22.10.2026.",
+          "source_ids": [
+            "gm-legal"
+          ]
+        },
+        {
+          "key": "activity",
+          "label": "Основная деятельность",
+          "value": "46.33: оптовая торговля молочными продуктами, яйцами, пищевыми маслами и жирами.",
+          "source_ids": [
+            "gm-legal"
+          ]
+        },
+        {
+          "key": "legal_address",
+          "label": "Юридический адрес",
+          "value": "Москва, ул. Бутлерова, 17Б, помещение 60Е/11/2. Склад в Томилино указан отдельно на сайте.",
+          "source_ids": [
+            "gm-legal",
+            "gm-contacts"
+          ]
+        },
+        {
+          "key": "management",
+          "label": "Руководитель",
+          "value": "Чакаев Вагиз Маратович.",
+          "source_ids": [
+            "gm-legal"
+          ]
+        },
+        {
+          "key": "finance",
+          "label": "Отчётность за 2025 год",
+          "value": "По Saby: выручка около 1,643 млрд ₽, чистая прибыль 57,1 млн ₽.",
+          "source_ids": [
+            "gm-legal"
+          ]
+        },
+        {
+          "key": "identity",
+          "label": "Связь с сайтом",
+          "value": "В каталоге Optsbyt указаны ИНН, домен gurman-llc.ru и телефон с официального сайта. Реквизиты продавца подтвердить в договоре.",
+          "source_ids": [
+            "gm-identity",
+            "gm-contacts"
+          ]
+        }
+      ]
+    }
+  ]
+}

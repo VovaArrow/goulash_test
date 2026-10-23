@@ -23,7 +23,9 @@ _VOLUME = re.compile(
 _PRICE = re.compile(r"до\s*(\d+(?:[.,]\d+)?)\s*(₽|руб\w*|р\b|тг|тенге|₸)")
 _RADIUS = re.compile(r"(?:до|радиус\w*)\s*(\d+)\s*км")
 _DAYS = re.compile(r"(\d+)\s*(?:дн\w*|день|сут\w*)")
-_SEGMENTS = re.compile(r",(?!\d)|;|\n")
+_SEGMENTS = re.compile(r",(?!\d)|;|\n|(?=\b(?:обязательно|желательно|по возможности|хорошо бы|плюсом|было бы)\b)")
+_UNSUPPORTED_CITIES = re.compile(r"новосибир\w*|краснояр\w*|санкт[- ]петербург\w*|петербург\w*|спб|омск\w*|томск\w*|уф[аеуы]|самар\w*|ростов\w*|краснодар\w*|воронеж\w*|нижн\w*\s+новгород\w*")
+_NEGATION = re.compile(r"(?:\bбез|\bне\s+нуж\w*|\bне\s+треб\w*)\s+(?:\w+\s+){0,2}$")
 
 
 def _pattern(stem: str) -> re.Pattern:
@@ -74,6 +76,10 @@ class RuleBasedQueryParser:
         product = _best_match(norm, _PRODUCT_PATTERNS)
         category = PRODUCTS[product].category if product else _best_match(norm, _CATEGORY_PATTERNS)
         city = _best_match(norm, _CITY_PATTERNS) or default_city
+        unknown_city = _UNSUPPORTED_CITIES.search(norm)
+        location_unresolved = bool(unknown_city)
+        if location_unresolved:
+            city = None
 
         volume = None
         if m := _VOLUME.search(norm):
@@ -93,12 +99,20 @@ class RuleBasedQueryParser:
         required: list[str] = []
         preferred: list[str] = []
         deferral_days = None
-        unparsed: list[str] = []
+        unparsed: list[str] = [f"город «{unknown_city.group()}» пока не поддерживается, выберите город из списка"] if unknown_city else []
         for raw_segment in _SEGMENTS.split(text):
             segment = _normalize(raw_segment)
             if not segment.strip():
                 continue
-            conditions = _matches(segment, _CONDITION_PATTERNS)
+            conditions = []
+            for cond, patterns in _CONDITION_PATTERNS.items():
+                matches = [m for pat, _ in patterns for m in pat.finditer(segment)]
+                if not matches:
+                    continue
+                if cond != "no_prepay" and all(_NEGATION.search(segment[:m.start()]) for m in matches):
+                    unparsed.append(f"отрицание «{raw_segment.strip()}»: условие не применено")
+                    continue
+                conditions.append(cond)
             target = preferred if _PREFERRED_MARKERS.search(segment) else required
             for cond in conditions:
                 if cond not in required and cond not in preferred:
@@ -123,9 +137,9 @@ class RuleBasedQueryParser:
             raw=text, category=category, product=product, city=city,
             volume_kg_month=volume, max_price_rub=max_price, required=required,
             preferred=preferred, deferral_days=deferral_days, unparsed=unparsed,
-            suggestions=suggestions,
+            suggestions=suggestions, location_unresolved=location_unresolved,
         )
-        if radius:
+        if radius is not None:
             criteria.radius_km = radius
         return criteria
 
@@ -183,10 +197,12 @@ class RuleBasedExplainer:
         lines.append(f"{round(item.distance_km)} км до точки доставки, привезут за {term}")
         if c.volume_kg_month is not None and s.min_order_kg <= c.volume_kg_month:
             lines.append(f"Мин. партия {s.min_order_kg:.0f} кг — укладывается в ваши {c.volume_kg_month:.0f} кг/мес")
-        met = [_condition_phrase(s, cond) for cond in c.required + c.preferred
-               if satisfies(s, cond, c, self.today) > 0]
+        conds = c.required + c.preferred
+        met = [_condition_phrase(s, cond) for cond in conds if satisfies(s, cond, c, self.today) == 1]
         if met:
             lines.append("Выполняет ваши условия: " + ", ".join(met))
+        if "deferral" in conds and satisfies(s, "deferral", c, self.today) == 0.5:
+            lines.append(f"Отсрочка {s.deferral_days} дн. (вы просили {c.deferral_days})")
         return lines[:4]
 
     def compare(self, items: list[ScoredSupplier], c: Criteria) -> CompareResult:

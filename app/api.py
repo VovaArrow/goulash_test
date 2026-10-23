@@ -1,6 +1,4 @@
 """HTTP API сервиса. Все ответы — JSON, ошибки — {"detail": "<по-русски>"}."""
-import sqlite3
-import threading
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -8,30 +6,49 @@ from pydantic import BaseModel, Field, field_validator
 
 from . import db
 from .ai.rules import RuleBasedExplainer, RuleBasedKPWriter, RuleBasedQueryParser
-from .catalog import CATEGORIES, CITIES, CONDITIONS, EXAMPLES, MODES
+from .catalog import CATEGORIES, CITIES, CONDITIONS, EXAMPLES, MODES, PRODUCTS
 from .models import (Channel, CompareResult, Criteria, KPDraft, KPRequest, KPStatus, Mode, Note,
                      Profile, SearchRequest, SearchResponse)
-from .scoring import WEIGHTS, reliability_report
+from .scoring import WEIGHTS, price_part, reliability_report, score_supplier
 from .search import run_search, score_selected
 from .seed import seed_db
+from .real_case import RealCase, load_real_case, make_draft
 
 router = APIRouter(prefix="/api")
 parser = RuleBasedQueryParser()
 writer = RuleBasedKPWriter()
 
 
-class Store:
-    """Одно соединение SQLite на приложение; запросы сериализуются замком."""
+@router.get("/real-case", response_model=RealCase)
+def real_case():
+    return load_real_case()
 
-    def __init__(self, conn: sqlite3.Connection):
-        self.conn = conn
-        self.lock = threading.Lock()
+
+class Store:
+    """Путь к базе SQLite. Соединение открывается на каждый запрос (WAL, ожидание блокировки 10 с)."""
+
+    def __init__(self, path: str):
+        self.path = path
 
 
 def get_conn(request: Request):
     store: Store = request.app.state.store
-    with store.lock:
-        yield store.conn
+    conn = db.connect(getattr(request.state, "db_path", store.path))
+    try:
+        # Public demo visitors may keep a database created before collections existed.
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='collections'").fetchone():
+            db.init_db(conn)
+        yield conn
+    finally:
+        conn.close()
+
+
+@router.post("/real-case/{supplier_id}/draft", response_model=KPDraft)
+def real_case_draft(supplier_id: str, conn=Depends(get_conn)):
+    supplier = next((s for s in load_real_case().suppliers if s.id == supplier_id), None)
+    if supplier is None:
+        raise HTTPException(404, "Поставщик реального сценария не найден")
+    return make_draft(supplier, db.get_profile(conn))
 
 
 def _today() -> date:
@@ -52,6 +69,7 @@ def _supplier_or_404(conn, supplier_id: int):
 @router.get("/meta")
 def meta():
     return {
+        "products": [{"key": k, "name": p.name, "unit": p.unit} for k, p in PRODUCTS.items()],
         "categories": [{"key": k, "label": v} for k, v in CATEGORIES.items()],
         "cities": [{"key": c.key, "name": c.name, "country": c.country, "lat": c.lat, "lon": c.lon} for c in CITIES.values()],
         "conditions": [{"key": k, "label": v.label} for k, v in CONDITIONS.items()],
@@ -103,7 +121,7 @@ def add_note(supplier_id: int, body: NoteIn, conn=Depends(get_conn)):
 
 class CompareIn(BaseModel):
     criteria: Criteria
-    supplier_ids: list[int]
+    supplier_ids: list[int] = Field(max_length=20)
     mode: Mode = "balance"
 
 
@@ -117,7 +135,9 @@ def compare(body: CompareIn, conn=Depends(get_conn)):
     items = score_selected(conn, ids, body.criteria, db.get_profile(conn), body.mode, today, explainer)
     if len(items) != len(ids):
         raise HTTPException(404, "Поставщик не найден")
-    return explainer.compare(items, body.criteria)
+    result = explainer.compare(items, body.criteria)
+    result.criteria = body.criteria
+    return result
 
 
 class DraftIn(BaseModel):
@@ -141,6 +161,7 @@ class KPItem(BaseModel):
 class KPIn(BaseModel):
     items: list[KPItem] = Field(min_length=1, max_length=20)
     product_label: str = Field(min_length=1, max_length=200)
+    criteria: Criteria | None = None
 
 
 _CHANNEL_FIELD = {"email": "email", "whatsapp": "whatsapp", "telegram": "telegram"}
@@ -157,7 +178,7 @@ def kp_create(body: KPIn, conn=Depends(get_conn)):
         if field and not getattr(s, field):
             raise HTTPException(422, f"У поставщика {s.name} нет контактов для этого канала")
     now = _now()
-    ids = [db.create_kp(conn, i.supplier_id, body.product_label, i.channel, now) for i in body.items]
+    ids = [db.create_kp(conn, i.supplier_id, body.product_label, i.channel, now, criteria=body.criteria) for i in body.items]
     return [db.get_kp(conn, rid, now) for rid in ids]
 
 
@@ -168,8 +189,16 @@ def kp_list(conn=Depends(get_conn)):
 
 class KPPatch(BaseModel):
     status: KPStatus | None = None
-    price_rub: float | None = Field(default=None, ge=0)
+    price_rub: float | None = Field(default=None, ge=0, le=1e12, allow_inf_nan=False)
     note: str | None = Field(default=None, max_length=500)
+
+
+    @field_validator("status")
+    @classmethod
+    def status_not_null(cls, value):
+        if value is None:
+            raise ValueError("Статус не может быть пустым")
+        return value
 
 
 @router.patch("/kp/{request_id}", response_model=KPRequest)
@@ -216,3 +245,65 @@ def demo_reset(conn=Depends(get_conn)):
     seed_db(conn)
     return {"ok": True}
 
+
+
+def criteria_key(c: Criteria) -> dict:
+    return c.model_dump(exclude={"raw", "unparsed", "suggestions"})
+
+
+class CompareQuotesIn(BaseModel):
+    request_ids: list[int] = Field(min_length=2, max_length=4)
+    mode: Mode = "balance"
+
+
+@router.post("/kp/compare", response_model=CompareResult)
+def compare_quotes(body: CompareQuotesIn, conn=Depends(get_conn)):
+    import statistics
+    rows = [db.get_kp(conn, rid, _now()) for rid in dict.fromkeys(body.request_ids)]
+    if any(r is None for r in rows):
+        raise HTTPException(404, "Запрос КП не найден")
+    if len(rows) < 2 or len({r.supplier_id for r in rows}) != len(rows):
+        raise HTTPException(422, "Выберите КП от разных поставщиков")
+    if any(r.status != "received" or r.price_rub is None or r.criteria is None for r in rows):
+        raise HTTPException(422, "Нужны полученные КП с ценами и сохранёнными критериями")
+    c = rows[0].criteria
+    if not c.product or any(criteria_key(r.criteria) != criteria_key(c) for r in rows):
+        raise HTTPException(422, "Можно сравнить КП по одному товару с одинаковыми критериями")
+    today = _today()
+    explainer = RuleBasedExplainer(today)
+    items = score_selected(conn, [r.supplier_id for r in rows], c, db.get_profile(conn), body.mode, today)
+    by_id = {r.supplier_id: r for r in rows}
+    median = statistics.median(r.price_rub for r in rows)
+    for item in items:
+        if item.offer is None:
+            raise HTTPException(422, "У поставщика нет запрошенного товара")
+        price = by_id[item.supplier.id].price_rub
+        item.offer = item.offer.model_copy(update={"price": price, "price_rub": price})
+        item.supplier = item.supplier.model_copy(update={"currency": "RUB"})
+        item.score, item.parts = score_supplier(item.supplier, c, item.offer, item.distance_km,
+                                                median, body.mode, today)
+        item.reasons = explainer.reasons(item, c, median)
+    result = explainer.compare(items, c)
+    result.criteria = c
+    result.quoted = True
+    result.conclusion = "По ценам из полученных КП. " + result.conclusion
+    return result
+
+
+class QuoteTextIn(BaseModel):
+    text: str = Field(min_length=1, max_length=8000)
+
+
+@router.post("/kp/{request_id}/extract")
+def quote_extract(request_id: int, body: QuoteTextIn, conn=Depends(get_conn)):
+    from .ai.quotes import extract_quote
+    row = db.get_kp(conn, request_id, _now())
+    if row is None:
+        raise HTTPException(404, "Запрос КП не найден")
+    result = extract_quote(body.text)
+    if row.criteria and row.criteria.product:
+        unit = PRODUCTS[row.criteria.product].unit
+        if result.unit is not None and result.unit != unit:
+            result.price_rub = None
+            result.warning = f"В ответе цена за {result.unit}, а товар учитывается за {unit}. Уточните цену за нужную единицу."
+    return result

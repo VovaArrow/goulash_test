@@ -5,6 +5,7 @@
     uv run --with playwright python scripts/e2e_flow.py
 Скриншоты — в data/e2e-shots/. Сценарий сбрасывает демо-данные в начале и в конце.
 """
+import os
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from playwright.sync_api import expect, sync_playwright
 
 OUT = Path(sys.argv[1] if len(sys.argv) > 1 else "data/e2e-shots")
 OUT.mkdir(parents=True, exist_ok=True)
-URL = "http://localhost:8000/"
+URL = os.environ.get("GOULASH_E2E_URL", "http://localhost:8000/").rstrip("/") + "/"
 errors = []
 
 
@@ -23,7 +24,7 @@ def card(page, name):
 with sync_playwright() as p:
     browser = p.webkit.launch()
     page = browser.new_page(viewport={"width": 1440, "height": 900})
-    page.on("console", lambda m: m.type == "error" and errors.append(m.text))
+    page.on("console", lambda m: (m.type == "error" or "Alpine Expression Error" in m.text) and errors.append(m.text))
     page.on("pageerror", lambda e: errors.append(str(e)))
 
     page.request.post(URL + "api/demo/reset")
@@ -76,24 +77,56 @@ with sync_playwright() as p:
     page.screenshot(path=OUT / "08-kp-sent.png")
     page.get_by_role("button", name="Готово").click()
 
-    page.get_by_role("button", name="Запросы КП").first.click()
-    page.wait_for_selector(".kp-card")
-    n = page.locator(".kp-card").count()
-    print("requests:", n)
-    assert n == 5
-    page.screenshot(path=OUT / "09-requests.png")
-    top = page.locator(".kp-card").first
-    top.locator("select").select_option("received")
-    top.locator("input[type=number]").fill("470")
-    top.locator("input[type=number]").press("Tab")
-    page.wait_for_timeout(500)
+    page.get_by_role("button", name="Мои подборки").first.click()
+    page.wait_for_selector(".collection-summary")
+    page.locator(".collection-summary").first.click()
+    opened = page.locator(".collection-body:visible")
+    expect(opened.locator(".collection-member")).to_have_count(2)
+    page.screenshot(path=OUT / "09-collections.png")
+    top = opened.locator(".collection-member").first
+    top.get_by_role("button", name="Внести ответ").click()
+    page.locator(".member-editor input[type=number]").fill("470")
+    page.locator(".member-editor textarea").fill("Цена из ответа, НДС включён")
+    page.get_by_role("button", name="Сохранить ответ", exact=True).click()
+    expect(page.locator(".member-editor")).to_have_count(0)
     page.reload()
-    page.get_by_role("button", name="Запросы КП").first.click()
-    page.wait_for_selector(".kp-card")
-    top = page.locator(".kp-card").first
-    assert top.locator("select").input_value() == "received", top.locator("select").input_value()
-    assert top.locator("input[type=number]").input_value() == "470"
-    print("persisted: ok")
+    page.wait_for_selector(".collection-summary")
+    page.locator(".collection-summary").first.click()
+    expect(page.locator(".collection-body:visible")).to_contain_text("470 ₽/кг")
+    print("collection and answer persisted: ok")
+
+    # Регрессии из ревью: выбор сбрасывается новым запросом, карта живёт после «Новый поиск», адрес — не HTML.
+    page.get_by_role("button", name="Поиск").first.click()
+    page.locator(".examples button").first.click()
+    page.wait_for_selector("article.card")
+    card(page, "Уральская сыроварня").locator(".cmp-toggle input").check()
+    expect(page.locator(".selbar")).to_be_visible()
+    page.fill("#q2", "лосось охлаждённый Екатеринбург 100 кг")
+    page.locator("#q2").press("Enter")
+    page.wait_for_timeout(800)
+    expect(page.locator(".selbar")).to_be_hidden()
+    print("selection reset on new query: ok")
+
+    page.get_by_role("button", name="Новый поиск").click()
+    page.locator(".examples button").nth(1).click()
+    page.wait_for_selector("article.card")
+    page.wait_for_timeout(1000)
+    pins = page.locator("#map .pin").count()
+    print("pins after new search:", pins)
+    assert pins > 0
+
+    prof = page.request.get(URL + "api/profile").json()
+    prof["address"] = '<img src=x onerror="window.__xss_addr=1">Кухня'
+    page.request.put(URL + "api/profile", data=prof)
+    page.reload()
+    page.locator(".examples button").first.click()
+    page.wait_for_selector(".origin-pin")
+    page.locator(".origin-pin").hover()
+    page.wait_for_timeout(400)
+    assert page.evaluate("window.__xss_addr") is None, "адрес профиля исполнился как HTML"
+    print("address tooltip is text: ok")
+    page.request.post(URL + "api/demo/reset")
+    page.reload()
 
     page.get_by_role("button", name="Как это работает").click()
     page.wait_for_timeout(200)
@@ -117,3 +150,4 @@ with sync_playwright() as p:
     browser.close()
 
 print("ERRORS:", errors or "none")
+assert not errors, errors

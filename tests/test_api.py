@@ -98,13 +98,15 @@ def test_kp_lifecycle(client):
     created = client.post("/api/kp", json={"product_label": "Моцарелла",
                                            "items": [{"supplier_id": ids[0], "channel": "whatsapp"},
                                                      {"supplier_id": ids[1], "channel": "email"}]}).json()
-    assert [x["status"] for x in created] == ["sent", "sent"]
-    assert created[0]["events"][0]["text"] == "Отправлено через WhatsApp"
-    created_at = datetime.fromisoformat(created[0]["created_at"])
-    assert created[0]["reply_due"] == (created_at + timedelta(days=3)).date().isoformat()
+    assert [x["status"] for x in created] == ["prepared", "prepared"]
+    assert "подготовлен" in created[0]["events"][0]["text"]
+    assert created[0]["reply_due"] is None
+    sent = client.patch(f'/api/kp/{created[0]["id"]}', json={"status": "sent"}).json()
+    sent_at = datetime.fromisoformat(sent["sent_at"])
+    assert sent["reply_due"] == (sent_at + timedelta(days=3)).date().isoformat()
     rid = created[0]["id"]
     upd = client.patch(f"/api/kp/{rid}", json={"status": "received", "price_rub": 480, "note": "ок"}).json()
-    assert upd["status"] == "received" and upd["price_rub"] == 480 and len(upd["events"]) == 2
+    assert upd["status"] == "received" and upd["price_rub"] == 480 and len(upd["events"]) == 3
     listed = client.get("/api/kp").json()
     assert len(listed) == before + 2 and listed[0]["id"] in {c["id"] for c in created}
 
@@ -118,8 +120,10 @@ def test_kp_seeded_and_waiting_derived(client):
 
 
 def test_kp_channel_without_contacts_422(client):
-    from app.db import load_suppliers
-    nocontact = [s.id for s in load_suppliers(client.app.state.store.conn) if s.preferred_channel is None]
+    from app.db import connect, load_suppliers
+    conn = connect(client.app.state.store.path)
+    nocontact = [s.id for s in load_suppliers(conn) if s.preferred_channel is None]
+    conn.close()
     assert nocontact
     r = client.post("/api/kp", json={"product_label": "x", "items": [{"supplier_id": nocontact[0], "channel": "email"}]})
     assert r.status_code == 422 and "нет контактов" in r.text
@@ -157,3 +161,20 @@ def test_demo_reset_restores(client):
 def test_index_served(client):
     r = client.get("/")
     assert r.status_code == 200 and "Goulash" in r.text
+
+
+def test_parallel_requests_do_not_deadlock(client):
+    import threading
+    criteria = client.post("/api/parse", json={"text": DEMO_TEXT}).json()
+    done = []
+
+    def hit():
+        r = client.post("/api/search", json={"criteria": criteria})
+        done.append(r.status_code)
+
+    threads = [threading.Thread(target=hit, daemon=True) for _ in range(80)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    assert len(done) == 80 and set(done) == {200}

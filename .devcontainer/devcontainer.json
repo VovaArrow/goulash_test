@@ -1,0 +1,11 @@
+{
+  "name": "Goulash suppliers",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "Goulash demo", "onAutoForward": "openBrowser" }
+  },
+  "customizations": {
+    "vscode": { "extensions": ["ms-python.python"] }
+  }
+}

@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta
 
 from .catalog import ANIMAL_CATEGORIES, CATEGORIES, CITIES, KZT_PER_RUB, PRODUCTS
 from .db import add_kp_event, add_note, create_kp, insert_supplier, save_profile
-from .models import Document, Product, Profile, Supplier
+from .models import Criteria, Document, Product, Profile, SearchRequest, Supplier
 
 GENERATED_ON = date(2026, 10, 22)
 
@@ -262,13 +262,64 @@ def _inject_risks(rnd: random.Random, suppliers: list[Supplier]) -> None:
 
 
 def seed_db(conn: sqlite3.Connection) -> None:
-    for table in ("kp_events", "kp_requests", "notes", "documents", "products", "suppliers", "profile"):
+    for table in ("collection_members", "collections", "kp_events", "kp_requests", "notes", "documents", "products", "suppliers", "profile"):
         conn.execute(f"DELETE FROM {table}")
     for s in generate_suppliers():
         insert_supplier(conn, s)
     save_profile(conn, DEFAULT_PROFILE)
     _seed_activity(conn, datetime.now().replace(microsecond=0))
+    seed_collections(conn)
     conn.commit()
+
+
+def seed_collections(conn: sqlite3.Connection) -> None:
+    """Дополняет демо разными потребностями, сохраняя существующие подборки и ответы."""
+    import json
+
+    from .collections import snapshot, title_for
+
+    scenarios = [
+        ("chicken_fillet", 600, "Куриное филе для сети кухонь, 600 кг в месяц, Екатеринбург", (379, 395),
+         ("Охлаждённое филе, доставка дважды в неделю включена, отсрочка 7 дней.",
+          "Охлаждённое филе, доставка 1500 ₽ за рейс, предоплата. Образец по запросу.")),
+        ("rice_sushi", 400, "Рис для суши, 400 кг в месяц, Екатеринбург", (145, 152),
+         ("Мешки по 25 кг, доставка включена от 200 кг, отсрочка 14 дней.",
+          "Мешки по 25 кг, самовывоз, предоплата. Возможна тестовая партия 25 кг.")),
+        ("roll_container", None, "Контейнеры для роллов, 10 000 штук в месяц, Екатеринбург", (9.5, 10.2),
+         ("Цена за комплект с крышкой, партия от 1000 шт., доставка включена от 10 000 шт.",
+          "Цена за комплект с крышкой, партия от 500 шт., доставка 900 ₽, предоплата.")),
+    ]
+    stamp = datetime.now().replace(microsecond=0)
+    with conn:
+        for index, (product, volume, raw, prices, terms) in enumerate(scenarios):
+            key = f"demo-collection:v1:{product}:ekb"
+            if conn.execute("SELECT 1 FROM collections WHERE search_key=?", (key,)).fetchone():
+                continue
+            search = SearchRequest(criteria=Criteria(product=product, city="ekb", volume_kg_month=volume, raw=raw))
+            suppliers = conn.execute(
+                "SELECT DISTINCT s.id FROM suppliers s JOIN products p ON p.supplier_id=s.id "
+                "WHERE p.key=? AND s.city='ekb' ORDER BY s.bankruptcy,s.mass_address,s.id LIMIT 4",
+                (product,),
+            ).fetchall()
+            if len(suppliers) < 4:
+                raise ValueError(f"Недостаточно демо-компаний для {product}")
+            at = (stamp - timedelta(days=index + 1)).isoformat()
+            cid = conn.execute(
+                "INSERT INTO collections(search_key,source,title,search_request,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+                (key, "demo", title_for(search.criteria), search.model_dump_json(), at, at),
+            ).lastrowid
+            for position, supplier in enumerate(suppliers):
+                sid = str(supplier["id"])
+                data = snapshot(conn, "demo", sid, search.criteria)
+                conn.execute(
+                    "INSERT INTO collection_members(collection_id,supplier_key,snapshot,status,price_rub,terms,note) "
+                    "VALUES(?,?,?,?,?,?,?)",
+                    (cid, sid, json.dumps(data, ensure_ascii=False),
+                     "received" if position < 2 else "sent" if position == 2 else "selected",
+                     prices[position] if position < 2 else None,
+                     terms[position] if position < 2 else "",
+                     "Демонстрационный ответ для сравнения, условия вымышлены." if position < 2 else ""),
+                )
 
 
 def _seed_activity(conn: sqlite3.Connection, now: datetime) -> None:
@@ -277,8 +328,8 @@ def _seed_activity(conn: sqlite3.Connection, now: datetime) -> None:
     add_note(conn, 2, "Владимир, закупки", "Менеджер отвечает быстро, но партия от 300 кг — для одной кухни много.", now - timedelta(days=6))
     third = conn.execute("SELECT supplier_id FROM products WHERE key = 'mozzarella' AND supplier_id > 3 "
                          "ORDER BY supplier_id LIMIT 1").fetchone()[0]
-    rid = create_kp(conn, 1, "Моцарелла", "whatsapp", now - timedelta(days=4))
+    rid = create_kp(conn, 1, "Моцарелла", "whatsapp", now - timedelta(days=4), status="sent", criteria=Criteria(product="mozzarella", city="ekb", volume_kg_month=200))
     add_kp_event(conn, rid, "received", "КП получено", now - timedelta(days=3))
     conn.execute("UPDATE kp_requests SET status = 'received', price_rub = 485, note = 'Образец привезут в пятницу' WHERE id = ?", (rid,))
-    create_kp(conn, 2, "Моцарелла", "email", now - timedelta(days=2))
-    create_kp(conn, third, "Моцарелла", "email", now - timedelta(hours=2))
+    create_kp(conn, 2, "Моцарелла", "email", now - timedelta(days=2), status="sent", criteria=Criteria(product="mozzarella", city="ekb", volume_kg_month=200))
+    create_kp(conn, third, "Моцарелла", "email", now - timedelta(hours=2), status="sent", criteria=Criteria(product="mozzarella", city="ekb", volume_kg_month=200))

@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from .models import Document, KPEvent, KPRequest, Note, Product, Profile, Supplier
+from .models import Criteria, Document, KPEvent, KPRequest, Note, Product, Profile, Supplier
 
 SCHEMA = Path(__file__).with_name("schema.sql")
 
@@ -15,14 +15,22 @@ _BOOL_FIELDS = ("own_delivery", "cold_chain", "prepay_required", "bankruptcy", "
 def connect(path: str) -> sqlite3.Connection:
     if path != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, check_same_thread=False)
+    conn = sqlite3.connect(path, check_same_thread=False, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    if path != ":memory:":
+        conn.execute("PRAGMA journal_mode = WAL")
     return conn
 
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA.read_text(encoding="utf-8"))
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(kp_requests)")}
+    if "criteria" not in columns:
+        conn.execute("ALTER TABLE kp_requests ADD COLUMN criteria TEXT")
+    if "sent_at" not in columns:
+        conn.execute("ALTER TABLE kp_requests ADD COLUMN sent_at TEXT")
+        conn.execute("UPDATE kp_requests SET sent_at = created_at WHERE status != 'prepared'")
     conn.commit()
 
 
@@ -135,19 +143,25 @@ def add_kp_event(conn: sqlite3.Connection, request_id: int, status: str, text: s
 
 
 def create_kp(conn: sqlite3.Connection, supplier_id: int, product_label: str, channel: str, now: datetime,
-              status: str = "sent", price_rub: float | None = None, note: str | None = None) -> int:
+              status: str = "prepared", price_rub: float | None = None, note: str | None = None,
+              criteria: Criteria | None = None) -> int:
     cur = conn.execute(
-        "INSERT INTO kp_requests (supplier_id, product_label, channel, status, price_rub, note, created_at) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (supplier_id, product_label, channel, status, price_rub, note, now.isoformat(timespec="seconds")))
-    add_kp_event(conn, cur.lastrowid, "sent", f"Отправлено через {CHANNEL_LABELS[channel]}", now)
+        "INSERT INTO kp_requests (supplier_id, product_label, channel, status, price_rub, note, created_at, criteria, sent_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (supplier_id, product_label, channel, status, price_rub, note, now.isoformat(timespec="seconds"),
+         criteria.model_dump_json() if criteria else None,
+         now.isoformat(timespec="seconds") if status != "prepared" else None))
+    add_kp_event(conn, cur.lastrowid, status,
+                 "Запрос подготовлен, отправку подтвердите вручную" if status == "prepared"
+                 else f"Отправлено через {CHANNEL_LABELS[channel]}", now)
     conn.commit()
     return cur.lastrowid
 
 
 def _kp_from_row(conn: sqlite3.Connection, r: sqlite3.Row, now: datetime) -> KPRequest:
     created = datetime.fromisoformat(r["created_at"])
-    days = max(0, (now.date() - created.date()).days)
+    sent_at = datetime.fromisoformat(r["sent_at"]) if r["sent_at"] else None
+    days = max(0, (now.date() - sent_at.date()).days) if sent_at else 0
     status = r["status"]
     if status == "sent" and days >= 1:
         status = "waiting"
@@ -156,7 +170,8 @@ def _kp_from_row(conn: sqlite3.Connection, r: sqlite3.Row, now: datetime) -> KPR
     return KPRequest(id=r["id"], supplier_id=r["supplier_id"], supplier_name=r["supplier_name"],
                      product_label=r["product_label"], channel=r["channel"], status=status,
                      price_rub=r["price_rub"], note=r["note"], created_at=created, days_waiting=days,
-                     reply_due=(created + timedelta(days=KP_REPLY_DAYS)).date(), events=events)
+                     reply_due=(sent_at + timedelta(days=KP_REPLY_DAYS)).date() if sent_at else None, events=events,
+                     sent_at=sent_at, criteria=Criteria.model_validate_json(r["criteria"]) if r["criteria"] else None)
 
 
 _KP_SELECT = ("SELECT k.*, s.name AS supplier_name FROM kp_requests k "
@@ -173,14 +188,18 @@ def get_kp(conn: sqlite3.Connection, request_id: int, now: datetime) -> KPReques
     return _kp_from_row(conn, r, now) if r else None
 
 
-KP_STATUS_EVENTS = {"sent": "Отправлено повторно", "waiting": "Ждём ответ",
+KP_STATUS_EVENTS = {"prepared": "Запрос подготовлен", "sent": "Отправлено повторно", "waiting": "Ждём ответ",
                     "received": "КП получено", "declined": "Поставщик отказал"}
 
 
 def update_kp(conn: sqlite3.Connection, request_id: int, fields: dict, now: datetime) -> None:
-    current = conn.execute("SELECT status FROM kp_requests WHERE id = ?", (request_id,)).fetchone()
+    current = conn.execute("SELECT status, sent_at FROM kp_requests WHERE id = ?", (request_id,)).fetchone()
     if "status" in fields and fields["status"] != current["status"]:
         add_kp_event(conn, request_id, fields["status"], KP_STATUS_EVENTS[fields["status"]], now)
+        if fields["status"] == "prepared":
+            fields["sent_at"] = None
+        elif fields["status"] == "sent" or not current["sent_at"]:
+            fields["sent_at"] = now.isoformat(timespec="seconds")
     if fields:
         sets = ", ".join(f"{k} = :{k}" for k in fields)
         conn.execute(f"UPDATE kp_requests SET {sets} WHERE id = :id", {**fields, "id": request_id})

@@ -52,7 +52,7 @@ def _hidden_reason(x: _Candidate, c: Criteria, f: Filters, today: date, skip: st
     elif x.distance_km > c.radius_km and x.distance_km > s.delivery_radius_km:
         return f"Далеко: дальше {c.radius_km} км и не возят"
     for cond in c.required:
-        if cond != skip and satisfies(s, cond, c, today) == 0:
+        if cond != skip and satisfies(s, cond, c, today) < 1:
             return f"Нет: {CONDITIONS[cond].label.lower()}"
     if c.max_price_rub is not None and x.offer and x.offer.price_rub is not None and x.offer.price_rub > c.max_price_rub:
         return f"Дороже {c.max_price_rub:g} ₽"
@@ -89,6 +89,9 @@ def run_search(conn: sqlite3.Connection, req: SearchRequest, profile: Profile, t
                explainer=None, source: SupplierSource | None = None) -> SearchResponse:
     c, f = req.criteria, req.filters
     lat, lon, label = origin_for(c, profile)
+    if c.location_unresolved:
+        return SearchResponse(criteria=c, results=[], hidden=[], median_price_rub=None,
+                              origin={"lat": lat, "lon": lon, "label": "Выберите поддерживаемый город"})
     source = source or SqliteMockSource(conn)
     cands = []
     for s in source.candidates(c):
@@ -97,17 +100,18 @@ def run_search(conn: sqlite3.Connection, req: SearchRequest, profile: Profile, t
         cands.append(_Candidate(s, offer, distance, risk_flags(s, c, offer, distance, today)))
 
     passed, hidden = _apply_filters(cands, c, f, today)
-    prices = [x.offer.price_rub for x in passed if x.offer and x.offer.price_rub is not None]
-    median = statistics.median(prices) if prices else None
+    medians = _medians(passed)
+    median = medians.get(c.product) if c.product else None
 
     results = []
     for x in passed:
-        total, parts = score_supplier(x.supplier, c, x.offer, x.distance_km, median, req.mode, today)
+        item_median = medians.get(x.offer.key) if x.offer else None
+        total, parts = score_supplier(x.supplier, c, x.offer, x.distance_km, item_median, req.mode, today)
         item = ScoredSupplier(supplier=x.supplier, score=total, parts=parts, distance_km=x.distance_km,
                               offer=x.offer, flags=x.flags,
                               logistics_text=logistics_text(x.supplier, x.distance_km))
         if explainer is not None:
-            item.reasons = explainer.reasons(item, c, median)
+            item.reasons = explainer.reasons(item, c, item_median)
         results.append(item)
     results.sort(key=_sort_key(req.sort))
 
@@ -125,8 +129,20 @@ def run_search(conn: sqlite3.Connection, req: SearchRequest, profile: Profile, t
         criteria=c, results=results,
         hidden=[HiddenReason(reason=k, count=v) for k, v in hidden.most_common()],
         median_price_rub=median, origin={"lat": lat, "lon": lon, "label": label},
-        facets=facets, relax=relax,
+        facets=facets, relax=relax, medians=medians,
     )
+
+
+MIN_PRICES_FOR_MEDIAN = 2
+
+
+def _medians(items: list[_Candidate]) -> dict[str, float]:
+    """Медиана цены по каждому товару отдельно: ₽/кг сравниваем только с ₽/кг того же товара."""
+    by_key: dict[str, list[float]] = {}
+    for x in items:
+        if x.offer and x.offer.price_rub is not None:
+            by_key.setdefault(x.offer.key, []).append(x.offer.price_rub)
+    return {k: statistics.median(v) for k, v in by_key.items() if len(v) >= MIN_PRICES_FOR_MEDIAN}
 
 
 def score_selected(conn: sqlite3.Connection, ids: list[int], c: Criteria, profile: Profile, mode: str,
@@ -142,11 +158,12 @@ def score_selected(conn: sqlite3.Connection, ids: list[int], c: Criteria, profil
             continue
         offer = best_offer(s, c)
         distance = round(haversine_km(lat, lon, s.lat, s.lon), 1)
-        total, parts = score_supplier(s, c, offer, distance, market.median_price_rub, mode, today)
+        median = market.medians.get(offer.key) if offer else None
+        total, parts = score_supplier(s, c, offer, distance, median, mode, today)
         item = ScoredSupplier(supplier=s, score=total, parts=parts, distance_km=distance, offer=offer,
                               flags=risk_flags(s, c, offer, distance, today),
                               logistics_text=logistics_text(s, distance))
         if explainer is not None:
-            item.reasons = explainer.reasons(item, c, market.median_price_rub)
+            item.reasons = explainer.reasons(item, c, median)
         items.append(item)
     return items

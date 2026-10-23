@@ -77,3 +77,25 @@ def test_kp_draft_without_product_uses_category():
 def test_kp_draft_without_anything():
     d = WRITER.draft(PROFILE, Criteria(), [make_supplier()])
     assert d.subject and "образ" in d.body
+
+
+def test_reasons_no_cross_product_median(conn):
+    c = PARSER.parse("привет", default_city="ekb")
+    r = run_search(conn, SearchRequest(criteria=c), PROFILE, TODAY, explainer=EXPLAINER)
+    counts = {}
+    for x in r.results:
+        if x.offer and x.offer.price_rub is not None:
+            counts[x.offer.key] = counts.get(x.offer.key, 0) + 1
+    for x in r.results:
+        if x.offer and counts.get(x.offer.key, 0) < 2:
+            assert not any("медиан" in line for line in x.reasons), x.reasons
+
+
+def test_partial_deferral_not_claimed_as_met(conn):
+    c = PARSER.parse("моцарелла Екб, желательно отсрочка 30 дней")
+    r = run_search(conn, SearchRequest(criteria=c), PROFILE, TODAY, explainer=EXPLAINER)
+    partial = [x for x in r.results if x.supplier.deferral_days and x.supplier.deferral_days < 30]
+    assert partial
+    for x in partial:
+        assert not any(line.startswith("Выполняет") and "отсрочка" in line for line in x.reasons)
+        assert any("вы просили 30" in line for line in x.reasons), x.reasons

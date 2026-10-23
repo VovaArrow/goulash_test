@@ -2,36 +2,59 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 Condition = Literal[
     "declarations", "mercury", "haccp", "halal", "chestny_znak",
-    "own_delivery", "cold_chain", "deferral", "producer_only",
+    "own_delivery", "cold_chain", "deferral", "producer_only", "no_prepay",
 ]
 Mode = Literal["balance", "reliability", "price", "speed"]
 SortKey = Literal["score", "price", "distance"]
 Level = Literal["ok", "warn", "bad"]
 Channel = Literal["email", "whatsapp", "telegram", "copy"]
-KPStatus = Literal["sent", "waiting", "received", "declined"]
+KPStatus = Literal["prepared", "sent", "waiting", "received", "declined"]
 
 
 class Criteria(BaseModel):
-    raw: str = ""
+    raw: str = Field(default="", max_length=1000)
     category: str | None = None
     product: str | None = None
     city: str | None = None
-    radius_km: int = 300
-    volume_kg_month: float | None = None
-    max_price_rub: float | None = None
+    location_unresolved: bool = False
+    radius_km: int = Field(default=300, ge=0, le=20000)
+    volume_kg_month: float | None = Field(default=None, gt=0, le=1e9, allow_inf_nan=False)
+    max_price_rub: float | None = Field(default=None, ge=0, le=1e12, allow_inf_nan=False)
     required: list[Condition] = []
     preferred: list[Condition] = []
-    deferral_days: int | None = None
+    deferral_days: int | None = Field(default=None, ge=0, le=3650)
     unparsed: list[str] = []
     suggestions: list[Condition] = []
 
 
+    @field_validator("category", "product", "city")
+    @classmethod
+    def known_key(cls, value, info):
+        from .catalog import CATEGORIES, CITIES, PRODUCTS
+        catalogs = {"category": CATEGORIES, "product": PRODUCTS, "city": CITIES}
+        if value is not None and value not in catalogs[info.field_name]:
+            raise ValueError(f"Неизвестное значение: {value}")
+        return value
+
+    @model_validator(mode="after")
+    def consistent_product(self):
+        from .catalog import PRODUCTS
+        if self.product:
+            category = PRODUCTS[self.product].category
+            if self.category is not None and self.category != category:
+                raise ValueError("Товар не относится к выбранной категории")
+            self.category = category
+        self.required = list(dict.fromkeys(self.required))
+        self.preferred = list(dict.fromkeys(k for k in self.preferred if k not in self.required))
+        return self
+
+
 class Filters(BaseModel):
-    max_distance_km: int | None = None
+    max_distance_km: int | None = Field(default=None, ge=0, le=20000)
     fit_min_order: bool = False
     hide_critical: bool = True
     supplier_type: Literal["any", "producer", "distributor"] = "any"
@@ -145,6 +168,7 @@ class SearchResponse(BaseModel):
     origin: dict
     facets: dict[str, int] = {}
     relax: list[RelaxHint] = []
+    medians: dict[str, float] = {}     # медиана цены в ₽ по ключу товара (если цен ≥ 2)
 
 
 class FactGroup(BaseModel):
@@ -197,7 +221,9 @@ class KPRequest(BaseModel):
     note: str | None
     created_at: datetime
     days_waiting: int
-    reply_due: date
+    reply_due: date | None
+    criteria: Criteria | None = None
+    sent_at: datetime | None = None
     events: list[KPEvent] = []
 
 
@@ -210,3 +236,5 @@ class CompareResult(BaseModel):
     items: list[ScoredSupplier]
     best: dict[str, int]
     conclusion: str
+    criteria: Criteria | None = None
+    quoted: bool = False
