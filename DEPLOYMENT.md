@@ -1,4 +1,35 @@
-# Постоянное размещение на Amvera
+# Текущее размещение на VPS
+
+Приложение доступно по адресу http://176.57.218.216. Используется Apache
+как reverse proxy к Uvicorn на `127.0.0.1:8000` и отдельный пользователь
+`goulash`. Сервис `goulash.service` включён в автозагрузку systemd.
+
+- Код: `/opt/goulash/app`, Python 3.12 и зависимости из `uv.lock`.
+- База и сессии: `/var/lib/goulash`, вне каталога кода.
+- Переменные: `/etc/goulash.env`, пример — `deploy/goulash.env.example`.
+- Конфигурации сервиса и Apache: `deploy/goulash.service` и
+  `deploy/apache-goulash.conf`.
+- Логи: `journalctl -u goulash`; перезапуск: `systemctl restart goulash`.
+
+Для обновления загрузите архив исходников в `/opt/goulash/app`, выполните
+`UV_PYTHON_INSTALL_DIR=/opt/goulash/python /opt/goulash/tools/uv sync --frozen --no-dev --no-install-project --python 3.12`
+из этого каталога и перезапустите сервис. Не удаляйте `/var/lib/goulash`.
+
+Доступ по IP сейчас использует HTTP. При подключении домена и HTTPS
+обновите виртуальный хост Apache и `GOULASH_PUBLIC_ORIGIN`, затем
+перезапустите сервис.
+
+PitchAI временно отключён по запросу владельца: вместо его сайта Apache
+возвращает 503, MySQL остановлен и исключён из автозагрузки, PHP 8.1
+отключён. Apache переключён с `mpm_prefork` на `mpm_event`.
+Файлы сайта, база MySQL и исходные виртуальные хосты сохранены.
+Для восстановления включите MySQL (`systemctl enable --now mysql`),
+отключите `mpm_event`, включите `mpm_prefork` и `php8.1` через a2dismod/a2enmod,
+выполните `a2dissite pitchai-stopped`, `a2ensite 000-default 000-default-le-ssl`,
+затем `apache2ctl configtest` и `systemctl restart apache2`.
+Goulash продолжает использовать отдельный виртуальный хост `goulash.conf`.
+
+# Альтернативное размещение на Amvera
 
 В `amvera.yml` настроены сборка существующего `Dockerfile`, HTTP-порт 8000
 и постоянное хранилище `/data`. SQLite и сессии посетителей сохраняются

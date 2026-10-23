@@ -1,0 +1,23 @@
+[Unit]
+Description=Goulash supplier search
+After=network.target
+
+[Service]
+Type=simple
+User=goulash
+Group=goulash
+WorkingDirectory=/opt/goulash/app
+EnvironmentFile=/etc/goulash.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/goulash/app/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/goulash
+
+[Install]
+WantedBy=multi-user.target

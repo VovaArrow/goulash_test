@@ -15,6 +15,16 @@ const api = async (path, opts = {}) => {
   return data;
 };
 
+// randomUUID requires HTTPS; getRandomValues also works on the temporary HTTP address.
+const collectionKey = () => {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
 const money = (v) => (v == null ? "—" : Math.round(v).toLocaleString("ru-RU"));
 const fmtDate = (s) => (s ? new Date(s).toLocaleDateString("ru-RU") : "");
 const fmtDateTime = (s) => (s ? new Date(s).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
@@ -75,8 +85,8 @@ document.addEventListener("alpine:init", () => {
     collectionDraft: null,
     pendingSaves: 0,
     saveError: "",
-    _demoCollectionKey: crypto.randomUUID(),
-    _realCollectionKey: crypto.randomUUID(),
+    _demoCollectionKey: collectionKey(),
+    _realCollectionKey: collectionKey(),
     _demoSignature: null,
     _demoCollectionId: null,
     _realCollectionId: null,
@@ -179,7 +189,7 @@ document.addEventListener("alpine:init", () => {
       ++this._searchVersion;
       clearTimeout(this._searchTimer);
       this.selected = [];
-      this._demoCollectionKey = crypto.randomUUID(); this._demoCollectionId = null; this._demoSignature = null;
+      this._demoCollectionKey = collectionKey(); this._demoCollectionId = null; this._demoSignature = null;
       this.saveError = "";
       this.loading = true;
       try {
@@ -217,7 +227,7 @@ document.addEventListener("alpine:init", () => {
       this.loading = false; this.error = "";
       this.destroyMap();
       this.res = null; this.criteria = null; this.query = ""; this.selected = [];
-      this._demoCollectionKey = crypto.randomUUID(); this._demoCollectionId = null; this._demoSignature = null;
+      this._demoCollectionKey = collectionKey(); this._demoCollectionId = null; this._demoSignature = null;
       this.view = "search";
     },
 
@@ -483,7 +493,7 @@ document.addEventListener("alpine:init", () => {
       const search = source === "demo" ? JSON.parse(JSON.stringify({ criteria: criteria || this.criteria || {}, filters: this.filters, mode: this.mode, sort: this.sort })) : null;
       if (source === "demo") {
         const signature = JSON.stringify(search);
-        if (this._demoSignature && this._demoSignature !== signature) { this._demoCollectionKey = crypto.randomUUID(); this._demoCollectionId = null; }
+        if (this._demoSignature && this._demoSignature !== signature) { this._demoCollectionKey = collectionKey(); this._demoCollectionId = null; }
         this._demoSignature = signature;
       }
       const key = source === "demo" ? this._demoCollectionKey : this._realCollectionKey;
@@ -610,7 +620,7 @@ document.addEventListener("alpine:init", () => {
       this.criteria = JSON.parse(JSON.stringify(c.search.criteria));
       this.query = this.criteria.raw || c.title;
       this.filters = { ...c.search.filters }; this.mode = c.search.mode; this.sort = c.search.sort;
-      this.selected = []; this._demoCollectionKey = crypto.randomUUID(); this._demoCollectionId = null; this._demoSignature = null;
+      this.selected = []; this._demoCollectionKey = collectionKey(); this._demoCollectionId = null; this._demoSignature = null;
       this.view = "search"; await this.search();
     },
 
@@ -633,8 +643,8 @@ document.addEventListener("alpine:init", () => {
       this.$refs.resetDlg.close();
       this.profile = await api("/profile");
       await this.loadCollections();
-      this.selected = []; this._demoCollectionKey = crypto.randomUUID(); this._demoCollectionId = null; this._demoSignature = null;
-      this._realCollectionKey = crypto.randomUUID(); this._realCollectionId = null;
+      this.selected = []; this._demoCollectionKey = collectionKey(); this._demoCollectionId = null; this._demoSignature = null;
+      this._realCollectionKey = collectionKey(); this._realCollectionId = null;
       this.openCollectionId = null; this.collectionChecked = {}; this.replyEditor.itemId = null;
       if (this.criteria) await this.search();
       this.toast("Демо-данные восстановлены");
